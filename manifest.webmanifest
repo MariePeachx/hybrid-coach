@@ -1,0 +1,14 @@
+{
+  "name": "Hybrid Coach",
+  "short_name": "Hybrid Coach",
+  "description": "Tu entrenamiento de fondo y fuerza, día a día, hacia tu carrera.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F5F0",
+  "theme_color": "#5F9874",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

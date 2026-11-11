@@ -1,0 +1,20 @@
+{"circuitos":[
+{"id":"pfg1","nombre":"PFG · Preparación física general","corto":"PFG","cuando":"Cuando el plan pone PFG, PFG I, II o III, o «2-3 vueltas PFG».",
+"metodo":"30″ cada ejercicio. Recuperación: la mínima posible (solo el cambio de un ejercicio a otro).",
+"bloques":[
+{"titulo":"1. Calentamiento · 5-10' de abdominales variados","ejercicios":["Flexión de una pierna y otra alternativamente (tumbada)","«Carpa» a una pierna, alternando","Sentada: flexión y extensión de piernas a la vez, sin tocar el suelo","Piernas flexionadas: elevación de tronco"]},
+{"titulo":"2. Circuito","ejercicios":["Sentadilla a una pierna con el pie de apoyo separado un pie de la silla (silla a la altura de la rodilla)","Flexión-extensión de brazos con las manos en un banco","Abdominal supino (boca arriba) con brazos en cruz: llevar la pierna al brazo contrario, alternando","Saltos a escalón (a la altura de la rodilla) con los pies juntos","De pie → cuclillas → avanzar con las manos hasta estirarte → flexión de brazos → vuelta de pie","Abdominal prono (boca abajo) con brazos en cruz: llevar la pierna al brazo contrario, alternando","De pie → cuclillas → piernas atrás → cuclillas → de pie (burpee sin salto)","Fondos de brazos con las manos en un banco","Abdominal «carpa» a dos piernas: de tendida a tocar brazos y piernas a la vez"]}]},
+{"id":"training","nombre":"Circuito training","corto":"Circuito training","cuando":"Cuando el plan pone «circuito training».",
+"metodo":"2-3 vueltas × 30″-35″-45″ por ejercicio. Recuperación: la mínima posible.",
+"bloques":[{"titulo":"12 ejercicios","ejercicios":["Cambios de piernas (escalador en el suelo)","Boca arriba, piernas verticales: llevarlas a derecha e izquierda","Saltos laterales sobre un obstáculo","Boca arriba en cruz: llevar la pierna a la mano contraria, alternando","Cambios de piernas en el terreno","Carpa a una pierna","Saltos a escalón","Skipping","Boca abajo: saltar llevando las dos piernas al pecho","Sentada, una pierna sin tocar el suelo: levantarte y sentarte (cuanto más bajo, más trabajo)","Carpa a dos piernas","Arrancadas continuas (con pesa ligera)"]}]},
+{"id":"pfg4","nombre":"PFG IV · con pesas","corto":"PFG IV","cuando":"Cuando el plan pone PFG IV.",
+"metodo":"Variante de la PFG I con el mismo método: 2 × 20 repeticiones. Intercala abdominales cada dos ejercicios.",
+"bloques":[{"titulo":"8 ejercicios","ejercicios":["Pullover (pectoral y tren superior)","Giros a tocar el talón con la pesa (oblicuos)","De pie o sentada: llevar los brazos hasta abajo, tipo jalón (dorsal)","Elevación de piernas (flexores de cadera)","Press con barra por delante y por detrás (hombros)","Extensión hacia atrás con pesa (lumbares)","Flexión de brazos con elevación de piernas (pectoral y tríceps)","Curl con barra, palmas hacia arriba (bíceps)"]}]},
+{"id":"vallas","nombre":"Fuerza y vallas","corto":"Fuerza y vallas","cuando":"Cuando el plan pone «circuito fuerza (de) vallas».",
+"metodo":"Trabajo de fuerza-resistencia. Alterna el ejercicio 1 con el 2 de cada bloque. Carga 15-30 kg según tu fuerza. Entre bloques: 2' de abdominales.",
+"bloques":[
+{"titulo":"Bloque 1","ejercicios":["3-4 × 15-20 sentadilla-salto","Saltos verticales alternados sobre 8-10 vallas"]},
+{"titulo":"Bloque 2","ejercicios":["2 izquierda + 2 derecha × 15-20 subida a banco","Saltos verticales a izquierda y derecha sobre 8-10 vallas"]},
+{"titulo":"Bloque 3","ejercicios":["3-4 × 15-20 muelleos (saltitos de tobillo)","Saltos verticales alternados en 8-10 vallas"]},
+{"titulo":"Bloque 4","ejercicios":["3-4 × 15-20 fondos (zancadas)","Pasos de valla alternados a 2 apoyos"]}]}
+]}
