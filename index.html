@@ -133,6 +133,28 @@ h1,h2,h3{margin:0;font-family:var(--f-head);letter-spacing:-.02em;text-wrap:bala
 .phase{display:flex;justify-content:space-between;align-items:baseline;margin:1.1rem .6rem .3rem}
 .phase h3{font-size:1rem}
 .ex{margin:.4rem 0 0;padding-left:1.2rem;display:grid;gap:.3rem}
+/* Dibujos de los ejercicios */
+.exlist{list-style:none;margin:.5rem 0 0;padding:0;display:grid;gap:.8rem}
+.exi{border:1px solid var(--line);border-radius:14px;padding:.55rem .7rem .75rem;background:var(--bg)}
+.exd svg{width:100%;height:auto;display:block;max-height:170px}
+.exi p{margin:.35rem 0 0;color:var(--ink);font-weight:600;display:flex;gap:.55rem;align-items:flex-start;line-height:1.45}
+.exn{flex:none;display:grid;place-items:center;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--str);color:#fff;font-size:.78rem;font-weight:800;margin-top:.05rem}
+.dj-limb{fill:none;stroke:var(--ink);stroke-width:4.2;stroke-linecap:round;stroke-linejoin:round}
+.dj-far{opacity:.36}
+.dj-torso{stroke:var(--ink);stroke-width:5.4;stroke-linecap:round}
+.dj-head{fill:var(--ink)}
+.dj-ground{stroke:var(--muted);stroke-width:1.6;opacity:.5}
+.dj-sep{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+.dj-prop{fill:var(--blue-soft);stroke:var(--blue);stroke-width:1.5}
+.dj-propline{stroke:var(--blue);stroke-width:2.4;stroke-linecap:round}
+.dj-ball{fill:var(--qual)}
+.dj-weight{stroke:var(--str)} .dj-weightf{fill:var(--str)} .dj-hole{fill:var(--bg)}
+.dj-cable{stroke:var(--muted);stroke-width:1.2;stroke-dasharray:2 2}
+.dj-arrow{fill:none;stroke:var(--qual);stroke-width:2.2;stroke-linecap:round}
+.dj-arrowhead{fill:var(--qual)}
+.dj-num{fill:var(--soft)}
+.dj-numt{font:700 8px var(--f-body);fill:var(--muted);text-anchor:middle}
+.dj-txt{font:600 7px var(--f-body);fill:var(--muted)}
 .chart svg{width:100%;height:auto;display:block}
 .chart text{fill:var(--muted);font-size:11px;font-family:var(--f-body)}
 #wdet,.card[id^="c-"]{scroll-margin-top:calc(70px + env(safe-area-inset-top,0px))}
@@ -186,6 +208,7 @@ details summary{cursor:pointer;font-weight:700;padding:.3rem 0}
   <a href="#historial" data-v="historial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Historial</a>
 </nav>
 
+<script src="dibujos.js"></script>
 <script>
 /* ---------- Tema ---------- */
 (function(){ let t = null; try { t = localStorage.getItem("hc-theme"); } catch(e){} if (t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t); })();
@@ -563,7 +586,8 @@ function vFuerza(){
   const t = today(), mon = mondayOf(t), sp = strengthPlanFor(mon), p = P();
   const hechas = S.workouts.filter(w=>{ const d = parseYmd(w.fecha); return d>=mon && d<addDays(mon,7) && (w.fuerza || w.tipo==="fuerza"); }).length;
   const cards = S.circuitos.map(c=>`<article class="card" id="c-${esc(c.id)}" ${S.circSel===c.id?'style="border:2px solid var(--str)"':""}><p class="kicker" style="color:var(--str)">${esc(c.corto)}</p><h2>${esc(c.nombre)}</h2><p>${esc(c.metodo)}</p><p class="hint">${esc(c.cuando)}</p>
-    ${c.bloques.map(b=>`<p style="color:var(--ink);font-weight:700;margin-top:.8rem">${esc(b.titulo)}</p><ol class="ex">${b.ejercicios.map(e=>`<li>${esc(e)}</li>`).join("")}</ol>`).join("")}</article>`).join("");
+    ${(()=>{ let n = 0; return c.bloques.map((b,bi)=>`<p style="color:var(--ink);font-weight:700;margin-top:1rem">${esc(b.titulo)}</p><ol class="exlist">${b.ejercicios.map((e,ei)=>{ n++; const d = window.HC_DIBUJO ? HC_DIBUJO(c.id,bi,ei,e) : "";
+      return `<li class="exi">${d?`<div class="exd">${d}</div>`:""}<p><span class="exn">${n}</span><span>${esc(e)}</span></p></li>`; }).join("")}</ol>`).join(""); })()}</article>`).join("");
   return `<div class="stack">
     <header class="hero"><p class="kicker" style="color:var(--str)">Ser fuerte</p><h1>Fuerza</h1><p>Los circuitos de tu entrenador. Objetivo: ${p.strengthDays} días por semana.</p></header>
     <section class="card"><p class="kicker">Esta semana</p><h2><span class="num">${hechas}</span> de ${p.strengthDays} sesiones hechas</h2>

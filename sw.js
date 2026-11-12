@@ -1,6 +1,6 @@
 // Guarda la app en el móvil para que se abra aunque no haya conexión.
-const CACHE = "hybrid-coach-v2";
-const FILES = ["./", "index.html", "temporada.json", "ejercicios.json", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "manifest.webmanifest"];
+const CACHE = "hybrid-coach-v3";
+const FILES = ["./", "index.html", "dibujos.js", "temporada.json", "ejercicios.json", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "manifest.webmanifest"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
