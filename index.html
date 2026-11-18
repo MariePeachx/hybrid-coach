@@ -242,7 +242,7 @@ const GLOSARIO = [
   [/\bTC\b|técnica de carrera|tc carrera/i, "TC", "técnica de carrera: skipping, talones, zancadas"],
   [/P\.?F\.?G/i, "PFG", "preparación física general: circuito de fuerza (pestaña Fuerza)"],
   [/\bc\.?c\.?\b|carrera continua|CC progresiva/i, "CC", "carrera continua, sin parar"],
-  [/progresiv/i, "progresivos", "aceleraciones de 80-100 m de menos a más"],
+  [/progresivos/i, "progresivos", "aceleraciones de 80-100 m de menos a más"],
   [/rectas/i, "rectas", "rectas de 80-100 m a ritmo vivo, vuelta al paso"],
   [/toboganes/i, "toboganes", "subidas rápidas y el resto a ritmo (I)"],
   [/fartlek|fartlerk/i, "fartlek", "cambios de ritmo libres durante el rodaje"],
@@ -309,7 +309,7 @@ function customWeek(kind, o, raceIdx){
 let planMemo = { key:"", val:null };
 function plan(){
   const o = mainObj(); if (!o || !o.fecha) return null;
-  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().suaves||{}, P().saltados||{}]);
+  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
   if (planMemo.key===key) return planMemo.val;
   const st = planStart(), race = parseYmd(o.fecha), raceMon = mondayOf(race), N = Math.round(daysBetween(st,raceMon)/7)+1;
   let val = null;
@@ -324,7 +324,7 @@ function plan(){
       let v = p || periodo("2025-26-p04") || latest, src = (id==="taper"||id==="race")?"app":"coach";
       const suave = id!=="race" && isSuave(start);
       if (suave){ const b = baseSuave(); if (b){ days = b.days; v = b.v; src = "suave"; } }
-      return { num:i+1, total:N, start, fase, v, days:restructure(moveRest(days), start), src, suave };
+      return { num:i+1, total:N, start, fase, v, days:rampWeek(restructure(moveRest(days), start), start), src, suave };
     });
     val = { start:st, race, raceMon, obj:o, weeks };
   }
@@ -341,13 +341,13 @@ function sessionFor(date){
     const i = Math.floor(daysBetween(pl.start,date)/7);
     if (i>=0 && i<pl.weeks.length){ const wk = pl.weeks[i]; return { kind:"plan", wk, v:wk.v, s:wk.days[dayIdx(date)]||"", label:`Semana ${wk.num} de ${wk.total}`, fase:wk.fase }; }
     if (i<0) return { kind:"pre", v:null, s:dayIdx(date)===6?"Descanso":"30-40' (I) suaves", label:"Antes de empezar", fase:"Tu plan empieza el "+fmtShort(pl.start) };
-    if (i===pl.weeks.length) return { kind:"rec", v:pl.weeks[pl.weeks.length-1].v, s:restructure(moveRest(customWeek("rec")), mondayOf(date))[dayIdx(date)], label:"Semana de recuperación", fase:"Después de la carrera" };
+    if (i===pl.weeks.length) return { kind:"rec", v:pl.weeks[pl.weeks.length-1].v, s:rampWeek(restructure(moveRest(customWeek("rec")), mondayOf(date)), mondayOf(date))[dayIdx(date)], label:"Semana de recuperación", fase:"Después de la carrera" };
   }
   const m = monthSlot(date);
   if (m.off) return { kind:"off", v:null, s:dayIdx(date)===P().restDay?"Descanso":"30-40' (I) libres", label:"Descanso activo", fase:"Agosto" };
   let v = versionFor(m.n), days = v ? (weeksOf(v)[m.w-1]||[]) : [], suave = false;
   if (isSuave(mondayOf(date))){ const b = baseSuave(); if (b){ days = b.days; v = b.v; suave = true; } }
-  return { kind:"mes", v, s: restructure(moveRest(days), mondayOf(date))[dayIdx(date)]||"", suave, label:"Plan de "+MESES_L[date.getMonth()], fase:"Entreno del mes" };
+  return { kind:"mes", v, s: rampWeek(restructure(moveRest(days), mondayOf(date)), mondayOf(date))[dayIdx(date)]||"", suave, label:"Plan de "+MESES_L[date.getMonth()], fase:"Entreno del mes" };
 }
 // Semana suave: cuando no estás a tope, la semana se cambia por la semana más suave de la base de tu entrenador
 const isSuave = monday => !!(P().suaves||{})[ymd(monday)];
@@ -396,6 +396,42 @@ async function setSkip(f, motivo){
   S.skipAsk = null; render();
 }
 const skipOf = f => (P().saltados||{})[f];
+// Vuelta progresiva: tras estar enferma o lesionada, unos días de rodajes suaves que van creciendo, sin series.
+// Dura tantos días como estuviste parada + 2 (máximo 7). Se activa sola con los días marcados o a mano con «Vuelvo…».
+const RAMP_TXT = "Vuelta progresiva";
+function rampInfo(date){
+  const f = ymd(date), sk = P().saltados||{}, sick = k => ["enferma","lesion"].includes(sk[k]);
+  if (sick(f)) return null;
+  const rd = +P().restDay;
+  // Cuenta solo los días de entreno desde que empieza la vuelta (el día de descanso no gasta un día)
+  const kFrom = start => { let k = 0; for (let d = new Date(start); d<=date; d = addDays(d,1)) if (dayIdx(d)!==rd) k++; return k; };
+  if (dayIdx(date)===rd) return null;
+  const v = P().vuelta;
+  if (v && v.desde && f>=v.desde){ const k = kFrom(parseYmd(v.desde)); if (k<=v.dias) return { k, R:v.dias }; }
+  for (let back=1; back<=10; back++){                   // último día enferma antes de hoy
+    const L = addDays(date,-back); if (!sick(ymd(L))) continue;
+    if (P().vueltaFin && f>=P().vueltaFin && ymd(L)<P().vueltaFin) return null;
+    let n = 1; while (n<14 && sick(ymd(addDays(L,-n)))) n++;   // días seguidos parada
+    const R = Math.min(7, n+2), k = kFrom(addDays(L,1));
+    return k<=R ? { k, R } : null;
+  }
+  return null;
+}
+function rampDay(date, s){
+  if (isRest(s) || isRace(s)) return s;
+  const r = rampInfo(date); if (!r) return s;
+  const plan = s.replace(/^30' muy suaves.*$/,"").replace(/ · movido del \w+$/,"");
+  const km = kmDe(plan) + minDe(plan)/5.2 || 8;
+  const f = 0.5 + 0.5*r.k/(r.R+1), X = Math.max(3, Math.min(Math.round(4 + 2.5*r.k), Math.round(km*f)));
+  const extra = r.k===r.R && r.R>2 ? " + 4 progresivos suaves" : "";
+  return `${RAMP_TXT} (día ${r.k} de ${r.R}): ${X} km muy suaves (I)${extra}. Sin series ni fuerza intensa; si notas cansancio, para.`;
+}
+const rampWeek = (days, start) => days.length===7 ? days.map((s,k)=>rampDay(addDays(start,k), s)) : days;
+async function setVuelta(dias){
+  const p = {...S.perfil}; if (dias){ p.vuelta = { desde:ymd(today()), dias }; delete p.vueltaFin; }
+  else { delete p.vuelta; p.vueltaFin = ymd(today()); } // al terminarla a mano, se olvida también la vuelta automática
+  try { await savePerfil(p); } catch(e){} S.vueltaAsk = false; render();
+}
 const isRest = s => /^\s*(descanso|calentamiento o descanso|recuperación|no entrenas hoy)/i.test(s) || !s.trim();
 const isRace = s => /\bcto\.|campeonato|criterium|milla de|carrera nerja|cross de |día de carrera/i.test(s);
 const isQuality = s => /\d\s*x\s*\d|\d+-\d+-\d+|rápid|fuertes|fartlek|progresiva|\((III|IV|V)|toboganes|cuestas|a tope|%|\(II\)|ritmo de media/i.test(s);
@@ -410,7 +446,7 @@ function strengthPlanFor(monday){
   ses.forEach((s,i)=>{ if (hasStrength(s)) res[i] = "plan"; });
   let need = target - Object.keys(res).length;
   for (let i=0; i<6 && need>0; i++){ const s = ses[i], next = ses[i+1]||"";
-    if (res[i] || res[i-1] || isRest(s) || isRace(s) || isQuality(s) || isRace(next)) continue; res[i] = "extra"; need--; }
+    if (res[i] || res[i-1] || isRest(s) || isRace(s) || isQuality(s) || isRace(next) || s.startsWith(RAMP_TXT)) continue; res[i] = "extra"; need--; }
   return res;
 }
 const RX = /\(((?:I{1,3}|IV|V)(?:\s*-\s*(?:I{1,3}|IV|V))*)\)/g;
@@ -504,7 +540,7 @@ function wireGoal(){
 function vHoy(){
   const t = today(), f = ymd(t), si = sessionFor(t), { v, s } = si, done = doneOn(f);
   const sp = strengthPlanFor(mondayOf(t)), sToday = sp[dayIdx(t)];
-  const tag = isRace(s) ? `<span class="pill" style="color:var(--race)">Carrera</span>` : isRest(s) ? `<span class="pill" style="color:var(--rest)">Descanso</span>` : isQuality(s) ? `<span class="pill" style="color:var(--qual)">Calidad</span>` : `<span class="pill" style="color:var(--run)">Rodaje</span>`;
+  const tag = s.startsWith(RAMP_TXT) ? `<span class="pill" style="color:var(--ok)">Vuelta progresiva</span>` : isRace(s) ? `<span class="pill" style="color:var(--race)">Carrera</span>` : isRest(s) ? `<span class="pill" style="color:var(--rest)">Descanso</span>` : isQuality(s) ? `<span class="pill" style="color:var(--qual)">Calidad</span>` : `<span class="pill" style="color:var(--run)">Rodaje</span>`;
   const rs = ritmosUsados(s), gl = glosarioDe(s);
   const main = `<div class="cardhead" style="margin:0"><p class="kicker">Hoy toca</p>${tag}</div>
     <p class="session">${fmtSession(s,v)}</p>
@@ -516,6 +552,7 @@ function vHoy(){
       : `<button class="btn primary big" data-act="quick" aria-expanded="${S.quick}">✓ Lo he hecho</button>${isRace(s)?"":`<button class="btn ghost" style="width:100%" data-act="skip-ask" data-f="${f}">Hoy no puedo entrenar</button>`}`}</div>
     ${S.skipAsk===f && !done.length ? skipPanel(f) : ""}
     ${S.quick && !done.length ? quickForm(s) : ""}
+    ${rampBox(t, s)}
     ${sickHint(t)}
     ${(si.wk?.suave||si.suave)?`<p class="hint" style="margin-top:.8rem">Semana suave: entrenos de base de tu entrenador.</p>`:si.kind==="plan"?`<p class="hint" style="margin-top:.8rem">${si.wk.src==="app"?"Semana preparada para tu carrera.":"Entreno de tu entrenador."}</p>`:""}`;
   const circs = circuitosDe(s); let fz;
@@ -558,6 +595,17 @@ function wireQuick(){
   });
 }
 
+function rampBox(t, s){
+  const r = rampInfo(t), f = ymd(t);
+  if (r) return `<div class="sum" style="margin-top:1rem">Estás volviendo después de estar parada: <b>día ${r.k} de ${r.R}</b>. Cada día corres un poco más; las series vuelven cuando acabe.
+    <div class="actions" style="margin-top:.6rem"><button class="btn ghost sm" data-act="vuelta-fin">Ya estoy bien: volver al plan</button></div></div>`;
+  if (skipOf(f) || isRace(s)) return "";
+  if (!S.vueltaAsk) return `<div class="actions" style="margin-top:.6rem;justify-content:center"><button class="btn ghost sm" data-act="vuelta-ask">Vuelvo después de estar enferma o lesionada</button></div>`;
+  return `<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)"><p class="kicker">¿Cuánto tiempo has estado parada?</p>
+    <div class="chips" style="margin-top:.6rem"><button class="chip" data-act="vuelta" data-d="3">1-2 días</button><button class="chip" data-act="vuelta" data-d="5">3-5 días</button><button class="chip" data-act="vuelta" data-d="7">Una semana o más</button></div>
+    <p class="hint" style="margin-top:.6rem">Desde hoy, unos días de rodajes suaves que van creciendo, sin series. Después vuelves a tu plan.</p>
+    <div class="actions" style="margin-top:.5rem"><button class="btn ghost sm" data-act="vuelta-cancel">Cancelar</button></div></div>`;
+}
 function skipPanel(f){
   const d = parseYmd(f), hoy = f===ymd(today());
   return `<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)">
@@ -794,6 +842,10 @@ document.addEventListener("click", async ev => {
   if (a==="quick-off"){ S.quick = false; render(); }
   if (a==="suave"){ const k = b.dataset.w, su = {...(P().suaves||{})}; if (su[k]) delete su[k]; else su[k] = true; b.disabled = true; try { await savePerfil({...S.perfil, suaves:su}); } catch(e){} render(); }
   if (a==="rest"){ try { await savePerfil({...S.perfil, restDay:+b.dataset.d}); } catch(e){} render(); }
+  if (a==="vuelta-ask"){ S.vueltaAsk = true; S.skipAsk = null; render(); }
+  if (a==="vuelta-cancel"){ S.vueltaAsk = false; render(); }
+  if (a==="vuelta"){ await setVuelta(+b.dataset.d); }
+  if (a==="vuelta-fin"){ await setVuelta(0); }
   if (a==="skip-ask"){ S.skipAsk = b.dataset.f; S.quick = false; render(); }
   if (a==="skip-cancel"){ S.skipAsk = null; render(); }
   if (a==="skip"){ await setSkip(b.dataset.f, b.dataset.m); }
