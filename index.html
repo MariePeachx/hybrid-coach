@@ -225,17 +225,45 @@ const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov"
 const MESES_L = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const ROUTES = ["hoy","semana","plan","fuerza","historial","objetivo","registrar"];
 const TYPES = { carrera:{label:"Carrera",c:"var(--run)",dist:true}, fuerza:{label:"Fuerza",c:"var(--str)",dist:false}, competicion:{label:"Competición",c:"var(--race)",dist:true}, otro:{label:"Otro",c:"var(--rest)",dist:true} };
-const PLAN_START = "2026-11-09";
+const PLAN_START = "2026-11-23"; // empezamos el lunes 23/11/2026 (el domingo 22 es el día 0)
 const DEFAULT_OBJ = { nombre:"Media maratón de Álora", distancia:21.1, fecha:"2027-03-07", tiempo:"" };
 const DEFAULT_P = { goals:"Correr fondo y ganar fuerza", strengthDays:2, experience:"intermedio", restDay:6 };
-// Camino a la carrera: semanas de los planes de tu entrenador, ordenadas de menos a más, y dos semanas finales de puesta a punto.
+// Camino a la carrera: semanas de los planes de tu entrenador reordenadas en carga progresiva.
+// Se empieza a tope (sin semanas de base), bloques de 3 semanas que suben + 1 de descarga, y dos semanas finales de puesta a punto.
+// El 4.º valor marca las semanas que llevan 2 días de descanso (las de más carga y las de descarga).
 const RACE_TEMPLATE = [
-  ["2024-25-p01",1,"Base"],["2024-25-p01",2,"Base"],["2024-25-p01",3,"Base"],["2024-25-p01",4,"Base"],
-  ["2025-26-p04",1,"Desarrollo"],["2025-26-p04",2,"Desarrollo"],["2025-26-p04",3,"Desarrollo"],["2025-26-p04",4,"Desarrollo"],
-  ["2024-25-p02",1,"Volumen"],["2024-25-p02",2,"Volumen"],["2024-25-p02",3,"Volumen"],["2024-25-p02",4,"Volumen"],
-  ["2024-25-p04",1,"Específico"],["2024-25-p04",2,"Específico"],["2024-25-p04",3,"Específico"],
-  ["taper",0,"Puesta a punto"],["race",0,"Semana de carrera"]];
-const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series, cuestas y tiradas progresivas.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km.", "Específico":"Series de 1 y 2 km cerca de tu ritmo de carrera.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
+  ["2024-25-p03",2,"Desarrollo"],["2024-25-p03",4,"Desarrollo"],["2024-25-p03",3,"Desarrollo",2],   // ≈59 → 62 → 70 km
+  ["2025-26-p05",4,"Descarga",2],                                                                   // ≈45 km
+  ["2024-25-p02",1,"Volumen"],["2024-25-p02",2,"Volumen"],["2024-25-p02",3,"Volumen",2],           // ≈82 → 91 → 94 km
+  ["2025-26-p06",4,"Descarga ",2],                                                                  // ≈52 km
+  ["2024-25-p04",2,"Específico"],["2025-26-p04",3,"Específico"],["2025-26-p04",2,"Específico"],    // ≈63 → 73 → 76 km, más intensidad
+  // (2025-26-p08 no se usa: es el plan del grupo de chicos)
+  ["2025-26-p11",4,"Descarga  ",2],                                                                 // ≈40 km
+  ["2024-25-p02",4,"Pico de forma"],                                                                // ≈82 km
+  ["taper",0,"Puesta a punto",2],["race",0,"Semana de carrera"]];
+const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Empiezas a tope: series, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
+const faseTxt = f => FASE_TXT[f.trim()]||"";
+// Quita las notas para otras compañeras («· Nombre: …») de los entrenos del grupo
+const limpia = s => String(s||"").replace(/\s·\s[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+:.*$/,"");
+// Segundo día de descanso: en semanas de mucha carga o de descarga (o siempre / nunca, según elijas).
+// Se quita la sesión más ligera que no sea importante; si todas lo son, la más corta que no sea la tirada larga.
+const DESC2_TXT = "Descanso · segundo día de descanso de la semana: asimilas la carga";
+function dosDescansos(days, toca){
+  const modo = P().descansos || "auto", rd = +(P().restDay ?? 6);
+  if (days.length!==7 || days.some(isRace) || days.filter(isRest).length>=2) return days;
+  if (!(modo==="2" || (modo==="auto" && toca))) return days;
+  const carga = s => kmDe(s) + minDe(s)/5.2, maxC = Math.max(...days.map(carga));
+  let best = -1;
+  for (const pase of [0,1]) {
+    days.forEach((s,i)=>{
+      if (isRest(s) || i===rd || (pase===0 && isKey(s)) || (pase===1 && carga(s)===maxC)) return;
+      if (best<0 || carga(s) < carga(days[best]) || (carga(s)===carga(days[best]) && Math.abs(i-rd)>Math.abs(best-rd))) best = i;
+    });
+    if (best>=0) break;
+  }
+  if (best<0) return days;
+  const d = days.slice(); d[best] = DESC2_TXT; return d;
+}
 const GLOSARIO = [
   [/\(I{1,3}\b|\(IV|\(V\b|\bI{1,3}\b \+/, "(I), (II)…", "zonas de ritmo; mira tus ritmos debajo"],
   [/\brc\b/i, "rc", "recuperación entre repeticiones (y entre series, si pone «y»)"],
@@ -285,7 +313,8 @@ function md(s){
 
 /* ---------- Objetivo ---------- */
 function mainObj(){ const os = Array.isArray(S.perfil.objetivos) ? S.perfil.objetivos.filter(o=>o&&o.nombre) : null; return os ? (os[0]||null) : DEFAULT_OBJ; }
-const planStart = () => mondayOf(parseYmd(P().planStart || PLAN_START));
+// El plan se reinició el 23/11/2026: una fecha guardada anterior ya no cuenta
+const planStart = () => mondayOf(parseYmd(P().planStart && P().planStart > PLAN_START ? P().planStart : PLAN_START));
 function segs(s){ const p = String(s||"").trim().split(/[:.']/).map(Number); if (!p.length || p.some(isNaN)) return 0; return p.length===3 ? p[0]*3600+p[1]*60+p[2] : p.length===2 ? p[0]*60+p[1] : 0; }
 function ritmoObjetivo(o){ const s = segs(o?.tiempo), km = +o?.distancia; if (!s || !km) return ""; const p = Math.round(s/km); return Math.floor(p/60)+"'"+z(p%60)+"″/km"; }
 const distLabel = d => +d===21.1||+d===21.0975 ? "Media maratón · 21,1 km" : +d===42.2||+d===42.195 ? "Maratón · 42,2 km" : +d ? String(d).replace(".",",")+" km" : "";
@@ -309,7 +338,7 @@ function customWeek(kind, o, raceIdx){
 let planMemo = { key:"", val:null };
 function plan(){
   const o = mainObj(); if (!o || !o.fecha) return null;
-  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
+  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
   if (planMemo.key===key) return planMemo.val;
   const st = planStart(), race = parseYmd(o.fecha), raceMon = mondayOf(race), N = Math.round(daysBetween(st,raceMon)/7)+1;
   let val = null;
@@ -318,13 +347,13 @@ function plan(){
     if (N<tpl.length) tpl = tpl.slice(tpl.length-N);
     else { const extra = []; for (let i=0;i<N-tpl.length;i++) extra.push(["2024-25-p01",(i%4)+1,"Base"]); tpl = extra.concat(tpl); }
     const latest = periodo("2025-26-p11") || S.periodos[0];
-    const weeks = tpl.map(([id,w,fase],i)=>{
+    const weeks = tpl.map(([id,w,fase,dd],i)=>{
       const p = periodo(id), start = addDays(st,7*i);
-      let days = id==="taper"||id==="race" ? customWeek(id,o,dayIdx(race)) : p ? (weeksOf(p)[w-1]||[]) : [];
+      let days = id==="taper"||id==="race" ? customWeek(id,o,dayIdx(race)) : p ? (weeksOf(p)[w-1]||[]).map(limpia) : [];
       let v = p || periodo("2025-26-p04") || latest, src = (id==="taper"||id==="race")?"app":"coach";
       const suave = id!=="race" && isSuave(start);
-      if (suave){ const b = baseSuave(); if (b){ days = b.days; v = b.v; src = "suave"; } }
-      return { num:i+1, total:N, start, fase, v, days:rampWeek(restructure(moveRest(days), start), start), src, suave };
+      if (suave){ const b = baseSuave(); if (b){ days = b.days.map(limpia); v = b.v; src = "suave"; } }
+      return { num:i+1, total:N, start, fase, v, days:rampWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), src, suave };
     });
     val = { start:st, race, raceMon, obj:o, weeks };
   }
@@ -340,7 +369,7 @@ function sessionFor(date){
   if (pl){
     const i = Math.floor(daysBetween(pl.start,date)/7);
     if (i>=0 && i<pl.weeks.length){ const wk = pl.weeks[i]; return { kind:"plan", wk, v:wk.v, s:wk.days[dayIdx(date)]||"", label:`Semana ${wk.num} de ${wk.total}`, fase:wk.fase }; }
-    if (i<0) return { kind:"pre", v:null, s:dayIdx(date)===6?"Descanso":"30-40' (I) suaves", label:"Antes de empezar", fase:"Tu plan empieza el "+fmtShort(pl.start) };
+    if (i<0) return { kind:"pre", v:null, s: daysBetween(date,pl.start)===1 ? "Descanso. Día 0: mañana empezamos a tope, duerme bien y deja preparada la ropa" : dayIdx(date)===6?"Descanso":"30-40' (I) suaves", label:"Antes de empezar", fase:"Tu plan empieza el "+fmtShort(pl.start) };
     if (i===pl.weeks.length) return { kind:"rec", v:pl.weeks[pl.weeks.length-1].v, s:rampWeek(restructure(moveRest(customWeek("rec")), mondayOf(date)), mondayOf(date))[dayIdx(date)], label:"Semana de recuperación", fase:"Después de la carrera" };
   }
   const m = monthSlot(date);
@@ -422,7 +451,8 @@ function rampDay(date, s){
   const r = rampInfo(date); if (!r) return s;
   const plan = s.replace(/^30' muy suaves.*$/,"").replace(/ · movido del \w+$/,"");
   const km = kmDe(plan) + minDe(plan)/5.2 || 8;
-  const f = 0.5 + 0.5*r.k/(r.R+1), X = Math.max(3, Math.min(Math.round(4 + 2.5*r.k), Math.round(km*f)));
+  // En días de series el plan cuenta pocos km (no suma las repeticiones): mínimo 8 km de referencia, para que la vuelta siempre suba
+  const f = 0.5 + 0.5*r.k/(r.R+1), X = Math.max(3, Math.round(Math.min(4 + 2.5*r.k, Math.max(km,8)*f)));
   const extra = r.k===r.R && r.R>2 ? " + 4 progresivos suaves" : "";
   return `${RAMP_TXT} (día ${r.k} de ${r.R}): ${X} km muy suaves (I)${extra}. Sin series ni fuerza intensa; si notas cansancio, para.`;
 }
@@ -655,6 +685,9 @@ function weekControls(mon){
     <p class="kicker" style="margin-top:1.1rem">Tu día de descanso</p>
     <div class="chips" style="margin-top:.4rem" role="group" aria-label="Día de descanso">${DIAS.map((d,i)=>`<button class="chip" data-act="rest" data-d="${i}" aria-pressed="${i===rd}">${d}</button>`).join("")}</div>
     <p class="hint" style="margin-top:.4rem">Los entrenos se recolocan en el mismo orden para que descanses ese día, todas las semanas.</p>
+    <p class="kicker" style="margin-top:1.1rem">Días de descanso por semana</p>
+    <div class="chips" style="margin-top:.4rem" role="group" aria-label="Días de descanso por semana">${[["auto","Cuando haga falta"],["1","Siempre 1"],["2","Siempre 2"]].map(([k,l])=>`<button class="chip" data-act="desc" data-d="${k}" aria-pressed="${(P().descansos||"auto")===k}">${l}</button>`).join("")}</div>
+    <p class="hint" style="margin-top:.4rem">«Cuando haga falta»: 2 días en las semanas de más carga y en las de descarga; 1 en el resto.</p>
   </section>`;
 }
 function ritmosCard(v){
@@ -671,7 +704,7 @@ function vPlan(){
   let html = "", lastF = "";
   pl.weeks.forEach((w,i)=>{
     if (w.fase!==lastF){ lastF = w.fase; const ws = pl.weeks.filter(x=>x.fase===w.fase);
-      html += `<div class="phase"><h3>${esc(w.fase)}</h3><span class="hint">${fmtShort(ws[0].start)} – ${fmtShort(addDays(ws[ws.length-1].start,6))}</span></div><p class="hint" style="margin:0 .6rem .3rem">${esc(FASE_TXT[w.fase]||"")}</p>`; }
+      html += `<div class="phase"><h3>${esc(w.fase)}</h3><span class="hint">${fmtShort(ws[0].start)} – ${fmtShort(addDays(ws[ws.length-1].start,6))}</span></div><p class="hint" style="margin:0 .6rem .3rem">${esc(faseTxt(w.fase))}</p>`; }
     const km = weekKm(w.days), dn = [0,1,2,3,4,5,6].filter(k=>doneOn(ymd(addDays(w.start,k))).length).length;
     html += `<button class="wrow${i===cur?" now":""}" data-act="wsel" data-i="${i}" aria-expanded="${i===sel}"><span class="wn">Sem ${w.num}</span>
       <span><b>${fmtShort(w.start)} – ${fmtShort(addDays(w.start,6))}</b><small>${i===cur?"Esta semana · ":""}${km?"≈ "+km+" km":""}${dn?" · "+dn+" hechos":""}</small></span><span class="hint">${i===sel?"▲":"▼"}</span></button>`;
@@ -680,7 +713,7 @@ function vPlan(){
       <div style="margin-top:.8rem">${ritmosCard(w.v)}</div></div>`;
   });
   return `<div class="stack">
-    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas, del ${fmtShort(pl.start)} ${pl.start.getFullYear()} al ${fmtLong(pl.race)} ${pl.race.getFullYear()}. Los entrenos son de tu entrenador, ordenados de menos a más carga; las dos últimas semanas te dejan fresca para la carrera.</p></header>
+    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas, del ${fmtShort(pl.start)} ${pl.start.getFullYear()} al ${fmtLong(pl.race)} ${pl.race.getFullYear()}. Empezamos a tope el lunes 23 de noviembre con los entrenos de tu entrenador, reordenados en carga progresiva: 3 semanas subiendo y 1 de descarga, hasta el pico de forma. Las semanas más duras y las de descarga llevan 2 días de descanso. Si un día no puedes correr, márcalo y la semana se reorganiza sola. Las dos últimas semanas te dejan fresca para la carrera.</p></header>
     <section class="card" style="padding:.3rem .5rem .6rem">${html}</section>
     ${S.notaGeneral?`<section class="card"><p class="kicker">Nota de tu entrenador</p><p style="color:var(--ink)">${esc(S.notaGeneral)}</p></section>`:""}
     <section class="card"><p class="kicker">Glosario</p><ul class="gloss">${GLOSARIO.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul></section>
@@ -792,7 +825,7 @@ function vObjetivo(){
     <div class="fields">
       <div class="field"><label for="o-date">Fecha de la carrera</label><input type="date" id="o-date" value="${esc(o.fecha)}"></div>
       <div class="field"><label for="o-time">Tiempo objetivo (opcional)</label><input type="text" id="o-time" inputmode="numeric" placeholder="1:45:00" value="${esc(o.tiempo)}"></div>
-      <div class="field"><label for="o-start">Empiezas a entrenar el</label><input type="date" id="o-start" value="${esc(p.planStart||PLAN_START)}"></div>
+      <div class="field"><label for="o-start">Empiezas a entrenar el</label><input type="date" id="o-start" value="${esc(p.planStart && p.planStart > PLAN_START ? p.planStart : PLAN_START)}"></div>
       <div class="field"><label for="o-fz">Días de fuerza / semana</label><select id="o-fz">${[1,2,3].map(n=>`<option value="${n}" ${+p.strengthDays===n?"selected":""}>${n}</option>`).join("")}</select></div>
       <div class="field"><label for="o-lvl">Nivel</label><select id="o-lvl">${["principiante","intermedio","avanzado"].map(n=>`<option ${p.experience===n?"selected":""}>${n}</option>`).join("")}</select></div>
       <div class="field"><label for="o-pain">Molestias</label><input type="text" id="o-pain" maxlength="200" value="${esc(p.currentDiscomfort||"")}" placeholder="Ninguna"></div>
@@ -842,6 +875,7 @@ document.addEventListener("click", async ev => {
   if (a==="quick-off"){ S.quick = false; render(); }
   if (a==="suave"){ const k = b.dataset.w, su = {...(P().suaves||{})}; if (su[k]) delete su[k]; else su[k] = true; b.disabled = true; try { await savePerfil({...S.perfil, suaves:su}); } catch(e){} render(); }
   if (a==="rest"){ try { await savePerfil({...S.perfil, restDay:+b.dataset.d}); } catch(e){} render(); }
+  if (a==="desc"){ try { await savePerfil({...S.perfil, descansos:b.dataset.d}); } catch(e){} render(); }
   if (a==="vuelta-ask"){ S.vueltaAsk = true; S.skipAsk = null; render(); }
   if (a==="vuelta-cancel"){ S.vueltaAsk = false; render(); }
   if (a==="vuelta"){ await setVuelta(+b.dataset.d); }
