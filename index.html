@@ -241,7 +241,7 @@ const RACE_TEMPLATE = [
   ["2025-26-p11",4,"Descarga  ",2],                                                                 // ≈40 km
   ["2024-25-p02",4,"Pico de forma"],                                                                // ≈82 km
   ["taper",0,"Puesta a punto",2],["race",0,"Semana de carrera"]];
-const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Empiezas a tope: series, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
+const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series cortas, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
 const faseTxt = f => FASE_TXT[f.trim()]||"";
 // Quita las notas para otras compañeras («· Nombre: …») de los entrenos del grupo
 const limpia = s => String(s||"").replace(/\s·\s[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+:.*$/,"");
@@ -263,6 +263,33 @@ function dosDescansos(days, toca){
   }
   if (best<0) return days;
   const d = days.slice(); d[best] = DESC2_TXT; return d;
+}
+// Series adaptadas: menos repeticiones al principio que suben poco a poco (del 55 % en la semana 1 al 85 % en el pico).
+// Solo toca series de distancia (10x400, 2x6x400, 3x5x300, 4x2 km…); 3 repeticiones o menos se quedan igual.
+function factorSeries(i, n){ return P().series==="completas" ? 1 : Math.min(0.85, 0.55 + 0.30*i/Math.max(1,n-3)); }
+function suavizaSeries(s, f){
+  if (f>=1) return s;
+  return s.replace(/(\d+)(?:-(\d+))?(\s*x\s*)(?=(\d+(?:[.,]\d+)?)(\s*km)?(?![\d.,]|\s*x|″|"|'))/gi, (m,a,b,xx,dist,km)=>{
+    const n = +a; if (!km && +dist<100) return m; if (n<=3) return m;
+    return Math.max(3, Math.round(n*f)) + xx; });
+}
+// Días con ansiedad: el entreno de hoy pasa a un rodaje tranquilo a sensaciones, sin reloj. No se recupera nada.
+const TRANQ_TXT = "Día tranquilo";
+const TRANQ_S = `${TRANQ_TXT}: 30-40' suaves a sensaciones, sin mirar el reloj ni el ritmo. Si te apetece, 4 progresivos suaves al final; si no, caminar también vale. Lo importante es salir y respirar.`;
+const tranqOf = f => !!(P().tranquilos||{})[f];
+const tranqWeek = (days, start) => days.length===7 ? days.map((s,k)=> tranqOf(ymd(addDays(start,k))) && !isRest(s) && !isRace(s) ? TRANQ_S : s) : days;
+async function setTranq(f, on){
+  const t = {...(P().tranquilos||{})}; if (on) t[f] = true; else delete t[f];
+  try { await savePerfil({...S.perfil, tranquilos:t}); } catch(e){} render();
+}
+// A sensaciones: las zonas se explican por cómo te sientes y se quitan los tiempos exactos
+const SENS = { I:"suave", II:"cómodo", III:"alegre", IV:"fuerte controlado", V:"fuerte controlado" };
+const SENS_TXT = [["suave","puedes hablar sin problema"],["cómodo","hablas con frases cortas"],["alegre","te cuesta hablar, pero lo controlas"],["fuerte controlado","un 8 de 10, nunca al máximo"]];
+const aSensaciones = () => P().ritmosModo!=="numeros";
+function sensacionesTxt(s){
+  return s.replace(/\s*\((?=[^()]*\d)[\d'″"‘’,.\s¿?%\-–]+\)/g,"")
+    .replace(/(\d+\s*(?:km\s*)?)(IV|III|II|I)\b(?=\s*[+)])/g, (m,n,z)=>n+SENS[z])
+    .replace(/\bfuertes\b/gi,"alegres").replace(/\brápidos\b/gi,"alegres").replace(/\brápido\b/gi,"alegre");
 }
 const GLOSARIO = [
   [/\(I{1,3}\b|\(IV|\(V\b|\bI{1,3}\b \+/, "(I), (II)…", "zonas de ritmo; mira tus ritmos debajo"],
@@ -338,7 +365,7 @@ function customWeek(kind, o, raceIdx){
 let planMemo = { key:"", val:null };
 function plan(){
   const o = mainObj(); if (!o || !o.fecha) return null;
-  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
+  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().series||"", P().tranquilos||{}, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
   if (planMemo.key===key) return planMemo.val;
   const st = planStart(), race = parseYmd(o.fecha), raceMon = mondayOf(race), N = Math.round(daysBetween(st,raceMon)/7)+1;
   let val = null;
@@ -353,7 +380,8 @@ function plan(){
       let v = p || periodo("2025-26-p04") || latest, src = (id==="taper"||id==="race")?"app":"coach";
       const suave = id!=="race" && isSuave(start);
       if (suave){ const b = baseSuave(); if (b){ days = b.days.map(limpia); v = b.v; src = "suave"; } }
-      return { num:i+1, total:N, start, fase, v, days:rampWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), src, suave };
+      if (src==="coach") days = days.map(s=>suavizaSeries(s, factorSeries(i, N)));
+      return { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), start), src, suave };
     });
     val = { start:st, race, raceMon, obj:o, weeks };
   }
@@ -480,7 +508,10 @@ function strengthPlanFor(monday){
   return res;
 }
 const RX = /\(((?:I{1,3}|IV|V)(?:\s*-\s*(?:I{1,3}|IV|V))*)\)/g;
-function fmtSession(s, v){ return esc(s).replace(RX, (m,g)=>{ const t = g.split(/\s*-\s*/).map(k=>v?.ritmos?.[k] ? k+": "+v.ritmos[k]+"/km" : k).join(" · "); return `<span class="rt" title="${esc(t)}">${g}</span>`; }); }
+function fmtSession(s, v){
+  if (aSensaciones()) return esc(sensacionesTxt(s)).replace(RX, (m,g)=>`<span class="rt">${g.split(/\s*-\s*/).map(k=>SENS[k]||k).join("-")}</span>`);
+  return esc(s).replace(RX, (m,g)=>{ const t = g.split(/\s*-\s*/).map(k=>v?.ritmos?.[k] ? k+": "+v.ritmos[k]+"/km" : k).join(" · "); return `<span class="rt" title="${esc(t)}">${g}</span>`; }); }
+const sensCard = () => `<p class="kicker">Ritmos a sensaciones</p><ul class="gloss">${SENS_TXT.map(([a,b])=>`<li><b>${a}</b> · ${b}</li>`).join("")}</ul><p class="hint">Sin mirar números: corre por cómo te sientes. Si un día va mal, baja un escalón y ya está.</p>`;
 function ritmosUsados(s){ const set = new Set(); (s.match(RX)||[]).forEach(m=>m.slice(1,-1).split(/\s*-\s*/).forEach(k=>set.add(k)));
   (s.match(/\b(I{1,3}|IV)\b(?= \+| \)|\))/g)||[]).forEach(k=>set.add(k)); return ["I","II","III","IV","V"].filter(k=>set.has(k)); }
 const glosarioDe = s => GLOSARIO.filter(([re])=>re.test(s));
@@ -574,12 +605,15 @@ function vHoy(){
   const rs = ritmosUsados(s), gl = glosarioDe(s);
   const main = `<div class="cardhead" style="margin:0"><p class="kicker">Hoy toca</p>${tag}</div>
     <p class="session">${fmtSession(s,v)}</p>
-    ${rs.length&&v?`<div class="paces">${rs.map(k=>`<span class="pace"><span class="rt">${k}</span><b>${esc(v.ritmos?.[k]||"—")}</b><span class="hint">/km</span></span>`).join("")}</div>`:""}
+    ${rs.length&&aSensaciones()?`<ul class="gloss">${rs.map(k=>SENS[k]).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<li><b>${x}</b> · ${SENS_TXT.find(([a])=>a===x)[1]}</li>`).join("")}</ul>`:""}
+    ${rs.length&&v&&!aSensaciones()?`<div class="paces">${rs.map(k=>`<span class="pace"><span class="rt">${k}</span><b>${esc(v.ritmos?.[k]||"—")}</b><span class="hint">/km</span></span>`).join("")}</div>`:""}
     ${gl.length?`<ul class="gloss">${gl.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul>`:""}
     <div class="actions" style="margin-top:1.1rem">${done.length?`<span class="done">✓ Hecho: ${esc(done.map(w=>fmtDur(w.duracion)+(w.distancia?" · "+(+w.distancia).toFixed(1)+" km":"")).join(" + "))}</span>`
       : skipOf(f) ? `<span class="hint">Tu semana se ha reorganizado. Mira «Semana» para ver los cambios.</span><button class="btn sm" data-act="skip-undo" data-f="${f}">Deshacer</button>`
       : isRest(s) ? `<span class="hint">Descansa. Si sales a correr, apúntalo.</span><button class="btn sm" data-act="quick">Registrar</button>`
-      : `<button class="btn primary big" data-act="quick" aria-expanded="${S.quick}">✓ Lo he hecho</button>${isRace(s)?"":`<button class="btn ghost" style="width:100%" data-act="skip-ask" data-f="${f}">Hoy no puedo entrenar</button>`}`}</div>
+      : `<button class="btn primary big" data-act="quick" aria-expanded="${S.quick}">✓ Lo he hecho</button>${isRace(s)?"":`<button class="btn ghost" style="width:100%" data-act="skip-ask" data-f="${f}">Hoy no puedo entrenar</button>`}
+        ${tranqOf(f) ? `<span class="hint" style="width:100%">Hoy toca ir tranquila, y está bien así. No hay nada que recuperar.</span><button class="btn ghost sm" data-act="tranq-off" data-f="${f}">Volver al entreno de hoy</button>`
+          : isRace(s) ? "" : `<button class="btn ghost" style="width:100%" data-act="tranq" data-f="${f}">Hoy voy con ansiedad</button>`}`}</div>
     ${S.skipAsk===f && !done.length ? skipPanel(f) : ""}
     ${S.quick && !done.length ? quickForm(s) : ""}
     ${rampBox(t, s)}
@@ -688,9 +722,16 @@ function weekControls(mon){
     <p class="kicker" style="margin-top:1.1rem">Días de descanso por semana</p>
     <div class="chips" style="margin-top:.4rem" role="group" aria-label="Días de descanso por semana">${[["auto","Cuando haga falta"],["1","Siempre 1"],["2","Siempre 2"]].map(([k,l])=>`<button class="chip" data-act="desc" data-d="${k}" aria-pressed="${(P().descansos||"auto")===k}">${l}</button>`).join("")}</div>
     <p class="hint" style="margin-top:.4rem">«Cuando haga falta»: 2 días en las semanas de más carga y en las de descarga; 1 en el resto.</p>
+    <p class="kicker" style="margin-top:1.1rem">Series</p>
+    <div class="chips" style="margin-top:.4rem" role="group" aria-label="Series">${[["adaptadas","Adaptadas a mí"],["completas","Completas"]].map(([k,l])=>`<button class="chip" data-act="series" data-d="${k}" aria-pressed="${(P().series==="completas"?"completas":"adaptadas")===k}">${l}</button>`).join("")}</div>
+    <p class="hint" style="margin-top:.4rem">«Adaptadas»: empiezas con algo más de la mitad de las repeticiones (por ejemplo 15x400 → 8x400) y vas subiendo poco a poco hasta el pico de forma.</p>
+    <p class="kicker" style="margin-top:1.1rem">Ritmos</p>
+    <div class="chips" style="margin-top:.4rem" role="group" aria-label="Ritmos">${[["sens","A sensaciones"],["numeros","Con números"]].map(([k,l])=>`<button class="chip" data-act="rmodo" data-d="${k}" aria-pressed="${(aSensaciones()?"sens":"numeros")===k}">${l}</button>`).join("")}</div>
+    <p class="hint" style="margin-top:.4rem">«A sensaciones»: sin tiempos ni ritmos por kilómetro; cada zona se explica por cómo te sientes.</p>
   </section>`;
 }
 function ritmosCard(v){
+  if (aSensaciones()) return sensCard();
   const o = mainObj(), r = ritmoObjetivo(o);
   return `<p class="kicker">Tus ritmos</p><div class="paces">${Object.entries(v.ritmos||{}).map(([k,x])=>`<span class="pace"><span class="rt">${k}</span><b>${esc(x)}</b><span class="hint">/km</span></span>`).join("")}${r?`<span class="pace"><span class="rt">Media</span><b>${r}</b></span>`:""}</div>${v.notas?`<p>${esc(v.notas)}</p>`:""}`;
 }
@@ -713,7 +754,7 @@ function vPlan(){
       <div style="margin-top:.8rem">${ritmosCard(w.v)}</div></div>`;
   });
   return `<div class="stack">
-    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas, del ${fmtShort(pl.start)} ${pl.start.getFullYear()} al ${fmtLong(pl.race)} ${pl.race.getFullYear()}. Empezamos a tope el lunes 23 de noviembre con los entrenos de tu entrenador, reordenados en carga progresiva: 3 semanas subiendo y 1 de descarga, hasta el pico de forma. Las semanas más duras y las de descarga llevan 2 días de descanso. Si un día no puedes correr, márcalo y la semana se reorganiza sola. Las dos últimas semanas te dejan fresca para la carrera.</p></header>
+    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas, del ${fmtShort(pl.start)} ${pl.start.getFullYear()} al ${fmtLong(pl.race)} ${pl.race.getFullYear()}. Empezamos el lunes 23 de noviembre con los entrenos de tu entrenador, reordenados en carga progresiva: 3 semanas subiendo y 1 de descarga, hasta el pico de forma. Las series empiezan con menos repeticiones y crecen poco a poco, y los ritmos van a sensaciones. Las semanas más duras y las de descarga llevan 2 días de descanso. Si un día no puedes correr, márcalo y la semana se reorganiza sola. Las dos últimas semanas te dejan fresca para la carrera.</p></header>
     <section class="card" style="padding:.3rem .5rem .6rem">${html}</section>
     ${S.notaGeneral?`<section class="card"><p class="kicker">Nota de tu entrenador</p><p style="color:var(--ink)">${esc(S.notaGeneral)}</p></section>`:""}
     <section class="card"><p class="kicker">Glosario</p><ul class="gloss">${GLOSARIO.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul></section>
@@ -875,6 +916,10 @@ document.addEventListener("click", async ev => {
   if (a==="quick-off"){ S.quick = false; render(); }
   if (a==="suave"){ const k = b.dataset.w, su = {...(P().suaves||{})}; if (su[k]) delete su[k]; else su[k] = true; b.disabled = true; try { await savePerfil({...S.perfil, suaves:su}); } catch(e){} render(); }
   if (a==="rest"){ try { await savePerfil({...S.perfil, restDay:+b.dataset.d}); } catch(e){} render(); }
+  if (a==="tranq") setTranq(b.dataset.f, true);
+  if (a==="tranq-off") setTranq(b.dataset.f, false);
+  if (a==="rmodo"){ try { await savePerfil({...S.perfil, ritmosModo:b.dataset.d}); } catch(e){} render(); }
+  if (a==="series"){ try { await savePerfil({...S.perfil, series:b.dataset.d}); } catch(e){} render(); }
   if (a==="desc"){ try { await savePerfil({...S.perfil, descansos:b.dataset.d}); } catch(e){} render(); }
   if (a==="vuelta-ask"){ S.vueltaAsk = true; S.skipAsk = null; render(); }
   if (a==="vuelta-cancel"){ S.vueltaAsk = false; render(); }
