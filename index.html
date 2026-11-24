@@ -243,6 +243,19 @@ const RACE_TEMPLATE = [
   ["taper",0,"Puesta a punto",2],["race",0,"Semana de carrera"]];
 const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series cortas, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
 const faseTxt = f => FASE_TXT[f.trim()]||"";
+// Semanas reescritas a mano (lunes de la semana → 7 días). Mandan sobre el plan de esa semana.
+const TL = "Descanso · Talent Land: hoy no entrenas";
+const SEMANAS_FIJAS = {
+  "2026-11-23": [
+    "Hecho: 4 km suave + fartlek 4'-3'-2'-1'-30″ alegres rc lo mismo + 10' suave",
+    TL, TL, TL,
+    "Vuelta tras Talent Land: 6 km suave + PFG I + 4 progresivos suaves. Al acabar, 10' muy suaves o caminando para terminar tranquila",
+    "12 km suave (I) sin mirar el ritmo; los 2 últimos km, aún más suaves. Al acabar, 5' caminando",
+    "Descanso"],
+};
+// Vuelta a la calma: en los días de calidad, terminar siempre tranquila (sin acabar con un sprint)
+const CALMA = " · Al acabar: 2-3' caminando y respirando despacio, para terminar tranquila";
+const calmaFinal = s => isQuality(s) && !/caminando/i.test(s) ? s + CALMA : s;
 // Quita las notas para otras compañeras («· Nombre: …») de los entrenos del grupo
 const limpia = s => String(s||"").replace(/\s·\s[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+:.*$/,"");
 // Segundo día de descanso: en semanas de mucha carga o de descarga (o siempre / nunca, según elijas).
@@ -380,7 +393,9 @@ function plan(){
       let v = p || periodo("2025-26-p04") || latest, src = (id==="taper"||id==="race")?"app":"coach";
       const suave = id!=="race" && isSuave(start);
       if (suave){ const b = baseSuave(); if (b){ days = b.days.map(limpia); v = b.v; src = "suave"; } }
-      if (src==="coach") days = days.map(s=>suavizaSeries(s, factorSeries(i, N)));
+      if (src==="coach") days = days.map(s=>calmaFinal(suavizaSeries(s, factorSeries(i, N))));
+      const fija = SEMANAS_FIJAS[ymd(start)];
+      if (fija) return { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(fija.slice(), start), start), src:"app", suave:false };
       return { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), start), src, suave };
     });
     val = { start:st, race, raceMon, obj:o, weeks };
