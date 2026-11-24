@@ -63,9 +63,15 @@ h1,h2,h3{margin:0;font-family:var(--f-head);letter-spacing:-.02em;text-wrap:bala
 .ib:hover,.ib[aria-current="page"]{background:var(--soft);color:var(--ink)}
 .ib svg,.tabbar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .main{max-width:560px;margin:0 auto;padding-block:16px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(6,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .tabbar a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:.55rem 0 .5rem;font-size:11px;font-weight:700;color:var(--muted)}
 .tabbar a[aria-current="page"]{color:var(--blue)}
+.breath{display:grid;place-items:center;margin:1rem auto .6rem;width:min(70vw,220px);aspect-ratio:1}
+.breath .orb{grid-area:1/1;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--ok) 45%,transparent),color-mix(in srgb,var(--blue) 25%,transparent));transform:scale(.55);transition:transform 4s ease-in-out}
+.breath .lbl{grid-area:1/1;text-align:center;font-weight:700;color:var(--ink);font-size:1.15rem;line-height:1.3;padding:0 1rem}
+.breath .lbl small{display:block;font-weight:600;color:var(--muted);font-size:.85rem}
+.steps{margin:.4rem 0 0;padding-left:1.2rem}.steps li{margin:.55rem 0;color:var(--ink)}.steps li span{display:block;color:var(--muted);font-size:.92rem}
+.sos{border:2px solid var(--race)}
 
 /* Piezas */
 .stack{display:flex;flex-direction:column;gap:1rem}
@@ -205,6 +211,7 @@ details summary{cursor:pointer;font-weight:700;padding:.3rem 0}
   <a href="#semana" data-v="semana"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Semana</a>
   <a href="#plan" data-v="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Plan</a>
   <a href="#fuerza" data-v="fuerza"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>Fuerza</a>
+  <a href="#calma" data-v="calma"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19C5 11 11 5 19 5c0 8-6 14-14 14z"/><path d="M5 19l7-7"/></svg>Calma</a>
   <a href="#historial" data-v="historial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Historial</a>
 </nav>
 
@@ -223,25 +230,26 @@ const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const DIAS_L = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const MESES_L = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-const ROUTES = ["hoy","semana","plan","fuerza","historial","objetivo","registrar"];
+const ROUTES = ["hoy","semana","plan","fuerza","calma","historial","objetivo","registrar"];
 const TYPES = { carrera:{label:"Carrera",c:"var(--run)",dist:true}, fuerza:{label:"Fuerza",c:"var(--str)",dist:false}, competicion:{label:"Competición",c:"var(--race)",dist:true}, otro:{label:"Otro",c:"var(--rest)",dist:true} };
 const PLAN_START = "2026-11-23"; // empezamos el lunes 23/11/2026 (el domingo 22 es el día 0)
 const DEFAULT_OBJ = { nombre:"Media maratón de Álora", distancia:21.1, fecha:"2027-03-07", tiempo:"" };
 const DEFAULT_P = { goals:"Correr fondo y ganar fuerza", strengthDays:2, experience:"intermedio", restDay:6 };
 // Camino a la carrera: semanas de los planes de tu entrenador reordenadas en carga progresiva.
-// Se empieza a tope (sin semanas de base), bloques de 3 semanas que suben + 1 de descarga, y dos semanas finales de puesta a punto.
+// La semana 1 (23/11) fue corta por Talent Land (≈30 km + fuerza en casa), así que la carga sube poco a poco desde ahí:
+// arranque, desarrollo, una descarga, volumen, específico y pico, sin subir más de un 15 % de una semana a otra salvo tras la descarga.
 // El 4.º valor marca las semanas que llevan 2 días de descanso (las de más carga y las de descarga).
 const RACE_TEMPLATE = [
+  ["2024-25-p03",2,"Arranque"],                                                                     // semana 1: la escrita a mano en SEMANAS_FIJAS
+  ["2025-26-p05",4,"Arranque",2],["2025-26-p06",4,"Arranque",2],                                    // ≈45 → 52 km
   ["2024-25-p03",2,"Desarrollo"],["2024-25-p03",4,"Desarrollo"],["2024-25-p03",3,"Desarrollo",2],   // ≈59 → 62 → 70 km
-  ["2025-26-p05",4,"Descarga",2],                                                                   // ≈45 km
-  ["2024-25-p02",1,"Volumen"],["2024-25-p02",2,"Volumen"],["2024-25-p02",3,"Volumen",2],           // ≈82 → 91 → 94 km
-  ["2025-26-p06",4,"Descarga ",2],                                                                  // ≈52 km
+  ["2025-26-p11",4,"Descarga",2],                                                                   // ≈40 km
+  ["2024-25-p02",1,"Volumen"],["2024-25-p02",2,"Volumen"],                                          // ≈82 → 91 km
   ["2024-25-p04",2,"Específico"],["2025-26-p04",3,"Específico"],["2025-26-p04",2,"Específico"],    // ≈63 → 73 → 76 km, más intensidad
   // (2025-26-p08 no se usa: es el plan del grupo de chicos)
-  ["2025-26-p11",4,"Descarga  ",2],                                                                 // ≈40 km
   ["2024-25-p02",4,"Pico de forma"],                                                                // ≈82 km
   ["taper",0,"Puesta a punto",2],["race",0,"Semana de carrera"]];
-const FASE_TXT = { "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series cortas, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
+const FASE_TXT = { "Arranque":"Vuelves a coger el ritmo después de Talent Land: semanas más cortas, con dos días de descanso y fuerza en casa.", "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series cortas, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
 const faseTxt = f => FASE_TXT[f.trim()]||"";
 // Semanas reescritas a mano (lunes de la semana → 7 días). Mandan sobre el plan de esa semana.
 const TL = "Descanso · Talent Land: hoy no entrenas";
@@ -552,6 +560,7 @@ const newId = () => "w-"+Date.now().toString(36)+Math.random().toString(36).slic
 /* ---------- Router ---------- */
 const route = () => { const h = location.hash.slice(1); return ROUTES.includes(h) ? h : "hoy"; };
 function render(){
+  paraRespirar();
   const t = today(), si = sessionFor(t);
   $("#foot").textContent = si.kind==="plan" ? `${si.label} · ${si.fase}` : si.label;
   const v = route();
@@ -561,8 +570,8 @@ function render(){
   if (S.mode==="error") st.innerHTML = "<b>No se pudo cargar el plan.</b> Comprueba tu conexión y recarga la página.";
   const el = $("#view");
   if (!S.periodos.length){ el.innerHTML = `<div class="card empty">Cargando tu plan…</div>`; return; }
-  el.innerHTML = ({hoy:vHoy,semana:vSemana,plan:vPlan,fuerza:vFuerza,historial:vHistorial,objetivo:vObjetivo,registrar:vRegistrar})[v]();
-  if (v==="hoy"){ wireQuick(); wireGoal(); } if (v==="registrar") wireRegistrar(); if (v==="objetivo") wireObjetivo();
+  el.innerHTML = ({hoy:vHoy,semana:vSemana,plan:vPlan,fuerza:vFuerza,calma:vCalma,historial:vHistorial,objetivo:vObjetivo,registrar:vRegistrar})[v]();
+  if (v==="hoy"){ wireQuick(); wireGoal(); } if (v==="calma") wireCalma(); if (v==="registrar") wireRegistrar(); if (v==="objetivo") wireObjetivo();
 }
 
 /* ---------- Hoy ---------- */
@@ -631,6 +640,7 @@ function vHoy(){
       : `<button class="btn primary big" data-act="quick" aria-expanded="${S.quick}">✓ Lo he hecho</button>${isRace(s)?"":`<button class="btn ghost" style="width:100%" data-act="skip-ask" data-f="${f}">Hoy no puedo entrenar</button>`}
         ${tranqOf(f) ? `<span class="hint" style="width:100%">Hoy toca ir tranquila, y está bien así. No hay nada que recuperar.</span><button class="btn ghost sm" data-act="tranq-off" data-f="${f}">Volver al entreno de hoy</button>`
           : isRace(s) ? "" : `<button class="btn ghost" style="width:100%" data-act="tranq" data-f="${f}">Hoy voy con ansiedad</button>`}`}</div>
+    ${(isQuality(s) || tranqOf(f) || done.length) && !isRest(s) ? `<div class="actions" style="margin-top:.6rem;justify-content:center"><a class="btn ghost sm" href="#calma">¿Ansiedad al acabar? Respira conmigo</a></div>` : ""}
     ${S.skipAsk===f && !done.length ? skipPanel(f) : ""}
     ${S.quick && !done.length ? quickForm(s) : ""}
     ${rampBox(t, s)}
@@ -780,6 +790,63 @@ function vPlan(){
 
 /* ---------- Fuerza ---------- */
 const circ = id => S.circuitos.find(c=>c.id===id);
+/* ---------- Calma ---------- */
+// Respiración guiada: inspira 4 s, suelta el aire en 6 s (la espiración larga baja las pulsaciones). Dura 3 minutos.
+const BR = { timer:null, fin:0 };
+function paraRespirar(){ if (BR.timer){ clearTimeout(BR.timer); BR.timer = null; } }
+function wireCalma(){
+  const b = $("#br-go"); if (!b) return;
+  const orb = $("#br-orb"), lbl = $("#br-lbl");
+  const parar = txt => { paraRespirar(); orb.style.transition = "transform 1.5s ease"; orb.style.transform = "scale(.55)"; lbl.innerHTML = txt; b.textContent = "Empezar a respirar"; b.dataset.on = ""; };
+  const ciclo = () => {
+    const quedan = Math.max(0, Math.round((BR.fin-Date.now())/1000));
+    if (!quedan) return parar("Muy bien.<small>Si aún lo notas, repite o sigue caminando despacio.</small>");
+    const m = Math.floor(quedan/60)+":"+z(quedan%60);
+    orb.style.transition = "transform 4s ease-in-out"; orb.style.transform = "scale(1)"; lbl.innerHTML = `Inspira por la nariz<small>4 segundos · quedan ${m}</small>`;
+    BR.timer = setTimeout(()=>{
+      orb.style.transition = "transform 6s ease-in-out"; orb.style.transform = "scale(.55)"; lbl.innerHTML = `Suelta el aire despacio<small>6 segundos, como soplando una vela</small>`;
+      BR.timer = setTimeout(ciclo, 6000);
+    }, 4000);
+  };
+  b.addEventListener("click", ()=>{
+    if (b.dataset.on) return parar("Cuando quieras.<small>3 minutos de respiración lenta</small>");
+    b.dataset.on = "1"; b.textContent = "Parar"; BR.fin = Date.now() + 180000; ciclo();
+  });
+}
+function vCalma(){
+  const pasos = [
+    ["No te pares en seco", "Sigue caminando despacio 3-5 minutos. Parar de golpe hace que el corazón acelerado y el mareo se noten más."],
+    ["Suspiro doble", "Dos inspiraciones seguidas por la nariz (una larga y otra cortita para llenar del todo) y una espiración larga por la boca. Repite 3-5 veces."],
+    ["Ponle nombre", "«Es la adrenalina del esfuerzo. Es incómoda, pero pasa en unos minutos.» Decírtelo baja el miedo, y el miedo es lo que la hace crecer."],
+    ["Frío", "Agua fría en la cara, las muñecas o la nuca, o algo frío en la mano. Ayuda a bajar las pulsaciones."],
+    ["5-4-3-2-1", "Nombra 5 cosas que ves, 4 que puedes tocar, 3 que oyes, 2 que hueles y 1 que saboreas. Te trae al presente."],
+    ["Suelta el cuerpo", "Baja los hombros, afloja la mandíbula y abre las manos. Si te mareas, siéntate o apóyate."],
+    ["Agua a sorbos", "Bebe despacio y, cuando puedas, come algo."],
+  ];
+  const antes = [
+    "Termina siempre suave: los últimos 10' fáciles y 2-3' caminando. Tu plan ya lo lleva en los días de series.",
+    "No acabes con un sprint ni con lo más rápido al final.",
+    "Antes de correr, 1 minuto de respiración lenta (puedes usar la de arriba).",
+    "Corre a sensaciones, sin mirar el ritmo. Si un día va mal, baja un escalón.",
+    "Evita mucho café o bebidas energéticas antes de entrenar, y no hagas series en ayunas.",
+    "Si sales con ansiedad, pulsa «Hoy voy con ansiedad» en Hoy: el entreno pasa a uno tranquilo.",
+    "Si puedes, entrena acompañada los días de series.",
+  ];
+  return `<div class="stack">
+    <header class="hero"><p class="kicker" style="color:var(--ok)">Después de correr</p><h1>Calma</h1><p>Si al acabar notas el corazón a mil, falta de aire, hormigueo o miedo: respira conmigo. Es muy desagradable, pero baja.</p></header>
+    <section class="card today" style="text-align:center"><p class="kicker">Respira ahora</p>
+      <div class="breath" aria-live="polite"><div class="orb" id="br-orb"></div><div class="lbl" id="br-lbl">Cuando quieras.<small>3 minutos de respiración lenta</small></div></div>
+      <div class="actions" style="justify-content:center"><button class="btn primary big" id="br-go" type="button">Empezar a respirar</button></div>
+      <p class="hint" style="margin-top:.6rem">Inspira 4 segundos y suelta el aire en 6. Sigue el círculo; si prefieres no mirar el móvil, cuenta tú.</p></section>
+    <section class="card"><p class="kicker">Si te viene un ataque, paso a paso</p><ol class="steps">${pasos.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join("")}</ol></section>
+    <section class="card"><p class="kicker">Para que no empiece</p><ul class="steps">${antes.map(a=>`<li>${a}</li>`).join("")}</ul></section>
+    <section class="card sos"><p class="kicker" style="color:var(--race)">Cuándo pedir ayuda</p>
+      <p style="color:var(--ink)"><b>Llama al 112</b> si tienes dolor u opresión en el pecho (sobre todo si va al brazo, la espalda o la mandíbula), te desmayas o casi, te falta el aire aunque estés parada, notas el corazón muy irregular o es distinto a otras veces.</p>
+      <p style="margin-top:.6rem">Si te pasa a menudo después de correr, cuéntaselo a tu médico. Un chequeo (un electrocardiograma o una prueba de esfuerzo) descarta que sea el corazón y te deja correr más tranquila. Un psicólogo puede enseñarte a manejar los ataques de pánico, y suele funcionar muy bien.</p>
+      <div class="actions" style="margin-top:.8rem"><a class="btn sm" href="tel:112">Llamar al 112</a></div></section>
+  </div>`;
+}
+
 function vFuerza(){
   const t = today(), mon = mondayOf(t), sp = strengthPlanFor(mon), p = P();
   const hechas = S.workouts.filter(w=>{ const d = parseYmd(w.fecha); return d>=mon && d<addDays(mon,7) && (w.fuerza || w.tipo==="fuerza"); }).length;
