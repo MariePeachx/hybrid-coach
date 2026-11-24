@@ -248,8 +248,10 @@ const TL = "Descanso · Talent Land: hoy no entrenas";
 const SEMANAS_FIJAS = {
   "2026-11-23": [
     "Hecho: 4 km suave + fartlek 4'-3'-2'-1'-30″ alegres rc lo mismo + 10' suave",
-    TL, TL, TL,
-    "Vuelta tras Talent Land: 6 km suave + PFG I + 4 progresivos suaves. Al acabar, 10' muy suaves o caminando para terminar tranquila",
+    "Fuerza en casa, 20 minutos: 3 vueltas de 12 sentadillas, 10 zancadas por pierna, 15 puentes de glúteo, 10 flexiones (de rodillas vale), 30″ de plancha y 10 superman. 1' de descanso entre vueltas. Talent Land: sin correr",
+    "Core en casa, 15-20 minutos: 3 vueltas de 40″ de plancha, 30″ de plancha lateral por lado, 20 bicicletas, 12 elevaciones de piernas, 10 dead bug por lado y 15 puentes de glúteo. 1' de descanso entre vueltas. Talent Land: sin correr",
+    "Vuelta a correr: 6 km suave + 4 progresivos suaves. Al acabar, 10' muy suaves o caminando para terminar tranquila",
+    "Descanso o 30' muy suaves si te apetece",
     "12 km suave (I) sin mirar el ritmo; los 2 últimos km, aún más suaves. Al acabar, 5' caminando",
     "Descanso"],
 };
@@ -513,7 +515,7 @@ function circuitosDe(s){ const t = s.toLowerCase(), out = [];
   if (/circuito training|circuito treining/.test(t)) out.push("training");
   if (/p\.?f\.?g\.?\s*iv/.test(t)) out.push("pfg4"); else if (/p\.?f\.?g|gimnasio|pesas|parte superior/.test(t)) out.push("pfg1");
   return out; }
-const hasStrength = s => circuitosDe(s).length>0 || /sentadilla|sento-saltos|balón medicinal|multilanzamientos|subidas a banco|abdominales|fuerza piernas/i.test(s);
+const hasStrength = s => circuitosDe(s).length>0 || /en casa|plancha|sentadilla|sento-saltos|balón medicinal|multilanzamientos|subidas a banco|abdominales|fuerza piernas/i.test(s);
 function strengthPlanFor(monday){
   const target = +P().strengthDays || 2, res = {}, ses = [0,1,2,3,4,5,6].map(i=>sessionFor(addDays(monday,i)).s);
   ses.forEach((s,i)=>{ if (hasStrength(s)) res[i] = "plan"; });
@@ -532,8 +534,8 @@ function ritmosUsados(s){ const set = new Set(); (s.match(RX)||[]).forEach(m=>m.
 const glosarioDe = s => GLOSARIO.filter(([re])=>re.test(s));
 const kmDe = s => { let t = 0; (s.match(/(\d+(?:[.,]\d+)?)(?:\s*-\s*\d+)?\s*km/gi)||[]).forEach(m=>t+=parseFloat(m.replace(",","."))); return t; };
 function minDe(s){ let t = 0; s.replace(/(?<!rc\s?)(?<![\d'])(\d+)(?:\s*-\s*(\d+))?'(?!')/g,(m,a)=>{ t += +a; return m; }); return t; }
-const estimaDuracion = s => Math.round(kmDe(s)*5.2 + minDe(s)) || "";
-function tipoDe(s){ if (isRace(s)) return "competicion"; if (circuitosDe(s).length && !kmDe(s) && !/\(I/.test(s)) return "fuerza"; return "carrera"; }
+const estimaDuracion = s => { const m = s.match(/(\d+)(?:-(\d+))? minutos/); return m ? +(m[2]||m[1]) : Math.round(kmDe(s)*5.2 + minDe(s)) || ""; };
+function tipoDe(s){ if (isRace(s)) return "competicion"; if (/^(fuerza|core) en casa/i.test(s)) return "fuerza"; if (circuitosDe(s).length && !kmDe(s) && !/\(I/.test(s)) return "fuerza"; return "carrera"; }
 function weekKm(days){ return Math.round(days.reduce((a,s)=>a+kmDe(s)+minDe(s)/5.2,0)); }
 
 /* ---------- Escrituras ---------- */
@@ -616,7 +618,7 @@ function wireGoal(){
 function vHoy(){
   const t = today(), f = ymd(t), si = sessionFor(t), { v, s } = si, done = doneOn(f);
   const sp = strengthPlanFor(mondayOf(t)), sToday = sp[dayIdx(t)];
-  const tag = s.startsWith(RAMP_TXT) ? `<span class="pill" style="color:var(--ok)">Vuelta progresiva</span>` : isRace(s) ? `<span class="pill" style="color:var(--race)">Carrera</span>` : isRest(s) ? `<span class="pill" style="color:var(--rest)">Descanso</span>` : isQuality(s) ? `<span class="pill" style="color:var(--qual)">Calidad</span>` : `<span class="pill" style="color:var(--run)">Rodaje</span>`;
+  const tag = s.startsWith(RAMP_TXT) ? `<span class="pill" style="color:var(--ok)">Vuelta progresiva</span>` : tipoDe(s)==="fuerza" ? `<span class="pill" style="color:var(--str)">Fuerza</span>` : isRace(s) ? `<span class="pill" style="color:var(--race)">Carrera</span>` : isRest(s) ? `<span class="pill" style="color:var(--rest)">Descanso</span>` : isQuality(s) ? `<span class="pill" style="color:var(--qual)">Calidad</span>` : `<span class="pill" style="color:var(--run)">Rodaje</span>`;
   const rs = ritmosUsados(s), gl = glosarioDe(s);
   const main = `<div class="cardhead" style="margin:0"><p class="kicker">Hoy toca</p>${tag}</div>
     <p class="session">${fmtSession(s,v)}</p>
