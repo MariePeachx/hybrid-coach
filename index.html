@@ -922,7 +922,9 @@ function vPlan(){
       <div style="margin-top:.8rem">${ritmosCard(w.v)}</div></div>`;
   });
   return `<div class="stack">
-    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas, del ${fmtShort(pl.start)} ${pl.start.getFullYear()} al ${fmtLong(pl.race)} ${pl.race.getFullYear()}. Empezamos el lunes 23 de noviembre con los entrenos de tu entrenador, reordenados en carga progresiva: 3 semanas subiendo y 1 de descarga, hasta el pico de forma. Las series empiezan con menos repeticiones y crecen poco a poco, y los ritmos van a sensaciones. Las semanas más duras y las de descarga llevan 2 días de descanso. Si un día no puedes correr, márcalo y la semana se reorganiza sola. Las dos últimas semanas te dejan fresca para la carrera.</p></header>
+    <header class="hero"><p class="kicker">Tu camino</p><h1>${esc(o.nombre)}</h1><p>${pl.weeks.length} semanas · del ${fmtShort(pl.start)} al ${fmtShort(pl.race)}</p>
+      <details class="ses" style="margin-top:.5rem"><summary><span class="st"><small class="tap">Cómo funciona tu plan</small></span><span class="chev" aria-hidden="true"></span></summary>
+        <ul class="steps" style="margin-top:.4rem"><li>La carga sube poco a poco, con semanas de descarga.</li><li>Las series empiezan cortas y crecen.</li><li>Ritmos a sensaciones.</li><li>Si no puedes correr un día, la semana se reorganiza sola.</li><li>Las dos últimas semanas te dejan fresca.</li></ul></details></header>
     <section class="card" style="padding:.3rem .5rem .6rem">${html}</section>
     ${S.notaGeneral?`<section class="card"><p class="kicker">Nota de tu entrenador</p><p style="color:var(--ink)">${esc(S.notaGeneral)}</p></section>`:""}
     <section class="card"><p class="kicker">Glosario</p><ul class="gloss">${GLOSARIO.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul></section>
