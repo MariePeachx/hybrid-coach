@@ -66,6 +66,8 @@ h1,h2,h3{margin:0;font-family:var(--f-head);letter-spacing:-.02em;text-wrap:bala
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(6,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .tabbar a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:.55rem 0 .5rem;font-size:11px;font-weight:700;color:var(--muted)}
 .tabbar a[aria-current="page"]{color:var(--blue)}
+body.gate .tabbar,body.gate .icons [data-v]{display:none}
+body.gate{padding-bottom:1rem}
 .ses summary{list-style:none;display:flex;align-items:center;gap:.65rem;cursor:pointer;padding:.15rem 0;-webkit-tap-highlight-color:transparent}
 .ses summary::-webkit-details-marker{display:none}
 .sdot{width:10px;height:10px;border-radius:50%;flex:none}
@@ -748,6 +750,10 @@ function render(){
   st.hidden = S.mode!=="error";
   if (S.mode==="error") st.innerHTML = "<b>No se pudo cargar el plan.</b> Comprueba tu conexión y recarga la página.";
   const el = $("#view");
+  // Solo con cuenta aprobada (o la administradora): si no, pantalla de entrada
+  const acceso = !!(window.hcAcceso && hcAcceso());
+  document.body.classList.toggle("gate", !acceso);
+  if (!acceso){ el.innerHTML = window.vCuenta ? vCuenta() : `<div class="card empty">Conectando… Para entrar en Hybrid Coach necesitas internet.</div>`; if (window.wireCuenta) wireCuenta(); return; }
   if (!S.periodos.length){ el.innerHTML = `<div class="card empty">Cargando tu plan…</div>`; return; }
   el.innerHTML = ({hoy:vHoy,semana:vSemana,plan:vPlan,fuerza:vFuerza,calma:vCalma,historial:vHistorial,objetivo:vObjetivo,registrar:vRegistrar,cuenta:()=>window.vCuenta ? vCuenta() : `<div class="card empty">Conectando… Para tu cuenta necesitas internet.</div>`})[v]();
   if (v==="hoy"){ wireQuick(); wireGoal(); } if (v==="calma") wireCalma(); if (v==="cuenta" && window.wireCuenta) wireCuenta(); if (v==="registrar") wireRegistrar(); if (v==="objetivo") wireObjetivo();
@@ -1274,14 +1280,12 @@ setInterval(checkDay, 60000);
 
 /* ---------- Arranque ---------- */
 function normPeriodo(p){ return {...p, n:+p.n, semanas:weeksOf(p)}; }
-async function boot(){
-  restore(); S.mode = "local"; render();
-  try {
-    const [t,e] = await Promise.all([fetch("temporada.json").then(r=>r.json()), fetch("ejercicios.json").then(r=>r.json())]);
-    S.periodos = (t.periodos||[]).map(normPeriodo); S.notaGeneral = t.notaGeneral||""; S.circuitos = e.circuitos||[];
-  } catch(err){ S.mode = "error"; }
-  render();
-}
+// Los planes del entrenador llegan desde Firebase (cuenta.js) solo a las cuentas aprobadas
+window.hcContenido = (t, e) => {
+  S.periodos = ((t&&t.periodos)||[]).map(normPeriodo); S.notaGeneral = (t&&t.notaGeneral)||""; S.circuitos = (e&&e.circuitos)||[];
+  S.mode = "local"; planMemo.key = ""; render();
+};
+function boot(){ restore(); S.mode = "local"; render(); }
 boot();
 if ("serviceWorker" in navigator) window.addEventListener("load", ()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>

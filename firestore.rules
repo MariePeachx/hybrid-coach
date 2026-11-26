@@ -7,6 +7,16 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
     function soyYo(uid) { return request.auth != null && request.auth.uid == uid; }
+    function aprobada() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.estado == "aprobada";
+    }
+
+    // Planes del entrenador: solo los leen las cuentas aprobadas; solo los sube la administradora.
+    match /contenido/{doc} {
+      allow read: if isAdmin() || aprobada();
+      allow write: if isAdmin();
+    }
 
     // Suscriptoras: cada una ve y edita su ficha (sin poder cambiarse el estado); la administradora, todas.
     match /users/{uid} {

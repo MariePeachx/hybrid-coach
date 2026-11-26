@@ -7,6 +7,9 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, ge
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const ADMIN = "maria.caparros.m@gmail.com";
+// Copia de los planes en el historial público de GitHub: solo se usa una vez, para subirlos a Firebase cuando entra la administradora
+const ORIGEN = "https://raw.githubusercontent.com/MariePeachx/hybrid-coach/07ba3180c99277e722ac66a6a3304711c268600f/";
+const CACHE_K = "hc-contenido";
 const app = initializeApp(window.HC_FIREBASE), auth = getAuth(app), db = getFirestore(app);
 auth.languageCode = "es";
 const A = window.HC_AUTH = { listo:false, user:null, datos:null, plan:null, admin:false, lista:null, aperturas:null, tab:"alta", msg:"", ok:"", busy:false, abierta:null };
@@ -38,18 +41,41 @@ async function registraApertura(){
   } catch(e){}
 }
 
+/* ---------- Acceso y planes del entrenador ---------- */
+const tieneAcceso = () => A.admin || A.datos?.estado==="aprobada";
+// Sin conexión: si este móvil ya entró con una cuenta aprobada, usa la copia guardada
+function cacheLee(){ try { return JSON.parse(localStorage.getItem(CACHE_K)||"null"); } catch(e){ return null; } }
+function cacheBorra(){ try { localStorage.removeItem(CACHE_K); } catch(e){} }
+window.hcAcceso = () => (A.listo && !A.offline) ? tieneAcceso() : !!cacheLee();
+{ const c0 = cacheLee(); if (c0) window.hcContenido(c0.t, c0.e); }
+async function cargaContenido(){
+  const [st, se] = await Promise.all([getDoc(doc(db, "contenido", "temporada")), getDoc(doc(db, "contenido", "ejercicios"))]);
+  let t = st.exists() ? JSON.parse(st.data().json) : null, e = se.exists() ? JSON.parse(se.data().json) : null;
+  if ((!t || !e) && A.admin){                      // primera vez: la administradora sube los planes a Firebase
+    const [rt, re] = await Promise.all([fetch(ORIGEN+"temporada.json").then(r=>r.json()), fetch(ORIGEN+"ejercicios.json").then(r=>r.json())]);
+    await setDoc(doc(db, "contenido", "temporada"), { json: JSON.stringify(rt), subido: serverTimestamp() });
+    await setDoc(doc(db, "contenido", "ejercicios"), { json: JSON.stringify(re), subido: serverTimestamp() });
+    t = rt; e = re; A.ok = "Planes del entrenador guardados en Firebase.";
+  }
+  if (t && e){ try { localStorage.setItem(CACHE_K, JSON.stringify({ t, e, uid: A.user.uid })); } catch(err){} window.hcContenido(t, e); }
+  else A.msg = "Aún no están subidos los planes. Avisa a la administradora.";
+}
+
 /* ---------- Estado de la sesión ---------- */
 async function carga(u){
-  A.user = u; A.admin = !!u && (u.email||"").toLowerCase()===ADMIN && u.emailVerified; A.datos = null; A.plan = null; A.lista = null; A.aperturas = null;
+  A.offline = false; A.user = u; A.admin = !!u && (u.email||"").toLowerCase()===ADMIN && u.emailVerified; A.datos = null; A.plan = null; A.lista = null; A.aperturas = null;
   if (u){
     try {
       const s = await getDoc(doc(db, "users", u.uid)); A.datos = s.exists() ? s.data() : null;
       if (A.datos) updateDoc(doc(db, "users", u.uid), { ultimaVez: serverTimestamp(), instalada: instalada(), plataforma: plataforma() }).catch(()=>{});
       if (A.datos?.estado==="aprobada"){ const p = await getDoc(doc(db, "planes", u.uid)); A.plan = p.exists() ? p.data() : null; }
       if (A.admin) await cargaAdmin();
-    } catch(e){ A.msg = errTxt(e); }
+      if (tieneAcceso()) await cargaContenido();
+    } catch(e){ if (cacheLee()?.uid===u.uid) A.offline = true; else A.msg = errTxt(e); }
   }
-  A.listo = true; refresca();
+  A.listo = true;
+  if (!A.offline && !tieneAcceso()){ const c0 = cacheLee(); if (c0 && (!u || c0.uid!==u.uid || A.datos)) { cacheBorra(); window.hcContenido(null, null); } }
+  render();
 }
 onAuthStateChanged(auth, async u => { await carga(u); registraApertura(); });
 
@@ -97,11 +123,11 @@ async function verificado(){
   catch(e){ aviso(errTxt(e)); }
 }
 async function reenviar(){ try { await sendEmailVerification(auth.currentUser); A.ok = "Email de verificación enviado. Mira también en spam."; } catch(e){ aviso(errTxt(e)); } refresca(); }
-async function salir(){ await signOut(auth); A.tab = "entrar"; A.msg = A.ok = ""; }
+async function salir(){ cacheBorra(); window.hcContenido(null, null); await signOut(auth); A.tab = "entrar"; A.msg = A.ok = ""; }
 async function borrarCuenta(){
   if (!confirm("¿Seguro que quieres borrar tu cuenta y tus datos? No se puede deshacer.")) return;
   const u = auth.currentUser;
-  try { await deleteDoc(doc(db, "users", u.uid)).catch(()=>{}); await deleteUser(u); A.ok = "Tu cuenta y tus datos se han borrado."; }
+  try { await deleteDoc(doc(db, "users", u.uid)).catch(()=>{}); await deleteUser(u); cacheBorra(); window.hcContenido(null, null); A.ok = "Tu cuenta y tus datos se han borrado."; }
   catch(e){ aviso(errTxt(e)); }
   refresca();
 }
@@ -145,8 +171,8 @@ const PRIV = `<details class="ses" style="margin-top:.4rem"><summary><span class
 
 function vAcceso(){
   const alta = A.tab==="alta";
-  return `<section class="card"><p class="kicker">Hybrid Coach Club</p><h2>Suscríbete gratis</h2>
-    <p>Responde unas preguntas y prepararé tu plan personalizado. Cuando apruebe tu solicitud, lo verás aquí con tu contraseña.</p>
+  return `<section class="card"><p class="kicker">Hybrid Coach</p><h2>Suscríbete para entrar</h2>
+    <p>Hybrid Coach es solo para suscriptoras. Es gratis: crea tu cuenta, responde unas preguntas y, cuando apruebe tu solicitud, tendrás tu plan de entrenamiento, la fuerza, la calma y tu contenido personalizado.</p>
     <div class="chips" style="margin-top:.8rem" role="group" aria-label="Acceso">
       <button class="chip" data-cu="tab" data-t="alta" aria-pressed="${alta}">Crear cuenta</button>
       <button class="chip" data-cu="tab" data-t="entrar" aria-pressed="${!alta}">Ya tengo cuenta</button></div>
@@ -177,8 +203,9 @@ function vSuscriptora(){
   if (d.estado==="aprobada") cuerpo = `<section class="card today"><p class="kicker">Tu plan personalizado</p>
       ${A.plan?.notas ? `<div style="white-space:pre-wrap;color:var(--ink);margin-top:.5rem">${esc(A.plan.notas)}</div><p class="hint" style="margin-top:.6rem">Actualizado: ${fecha(A.plan.actualizado)}</p>` : `<p>Estoy preparando tu contenido personalizado. Aparecerá aquí.</p>`}
       ${c.fecha ? `<div class="actions" style="margin-top:1rem"><button class="btn primary" data-cu="aplicar">Usar mi objetivo en el plan</button></div><p class="hint" style="margin-top:.4rem">${esc(c.carrera||c.objetivo)} · ${esc(c.fecha)}. El plan empieza el próximo lunes.</p>` : ""}</section>`;
-  else if (d.estado==="rechazada") cuerpo = `<section class="card"><p>Ahora mismo no tienes acceso al contenido personalizado. Puedes seguir usando el plan gratuito.</p></section>`;
-  else cuerpo = `<section class="card"><h2>Solicitud enviada 🙌</h2><p>Revisaré tus respuestas y te daré acceso. Mientras, puedes usar el plan gratuito.</p></section>`;
+  else if (d.estado==="rechazada") cuerpo = `<section class="card"><p>Ahora mismo tu cuenta no tiene acceso a Hybrid Coach.</p></section>`;
+  else cuerpo = `<section class="card today"><h2>Solicitud enviada 🙌</h2><p>Revisaré tus respuestas y te daré acceso. Cuando te apruebe, vuelve a abrir la app y entrarás directamente.</p>
+    <div class="actions" style="margin-top:.8rem"><button class="btn sm" data-cu="comprobar">Comprobar si ya tengo acceso</button></div></section>`;
   return `${cuerpo}<section class="card"><div class="cardhead" style="margin:0"><p class="kicker">Mi cuenta</p>${est}</div>
     <p style="color:var(--ink)">${esc(d.nombre)} · ${esc(u.email)}</p>
     ${!u.emailVerified?`<p class="hint" style="margin-top:.4rem">Confirma tu email con el enlace que te enviamos.</p><div class="actions" style="margin-top:.4rem"><button class="btn ghost sm" data-cu="reenviar">Reenviar email</button></div>`:""}
@@ -215,7 +242,7 @@ function vAdmin(){
 window.vCuenta = function(){
   const msg = `<div id="cu-msg">${msgHtml()}</div>`;
   const body = !A.listo ? `<div class="card empty">Conectando…</div>` : !A.user ? vAcceso() : A.admin || (A.user.email||"").toLowerCase()===ADMIN ? vAdmin() : vSuscriptora();
-  return `<div class="stack"><header class="hero"><p class="kicker">${A.admin?"Administradora":"Mi cuenta"}</p><h1>${A.admin?"Tu panel":A.user?"Hola"+(A.datos?.nombre?", "+esc(A.datos.nombre):""):"Únete"}</h1></header>${msg}${body}</div>`;
+  return `<div class="stack"><header class="hero"><p class="kicker">${A.admin?"Administradora":"Mi cuenta"}</p><h1>${A.admin?"Tu panel":A.user?"Hola"+(A.datos?.nombre?", "+esc(A.datos.nombre):""):"Bienvenida"}</h1></header>${msg}${body}</div>`;
 };
 window.wireCuenta = function(){
   const f = $("#cform"); if (f) f.addEventListener("submit", ev => { ev.preventDefault(); A.tab==="alta" ? alta() : entrar(); });
@@ -231,6 +258,7 @@ document.addEventListener("click", ev => {
   if (a==="reenviar") reenviar();
   if (a==="verificado") verificado();
   if (a==="aplicar") aplicarObjetivo();
+  if (a==="comprobar") carga(auth.currentUser).then(()=>{ if (!tieneAcceso()) aviso("Todavía no está aprobada. Vuelve a mirar más tarde."); });
   if (a==="aprobar") estado(uid, "aprobada");
   if (a==="rechazar") estado(uid, "rechazada");
   if (a==="guardaplan") guardaPlan(uid);
@@ -241,4 +269,4 @@ window.hcHoyCard = () => A.datos?.estado==="aprobada" && A.plan?.notas
   ? `<section class="card"><div class="cardhead" style="margin:0"><p class="kicker">Para ti</p><a class="btn sm" href="#cuenta">Ver todo</a></div><p style="color:var(--ink);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">${esc(A.plan.notas)}</p></section>`
   : "";
 window.hcEsSuscriptora = () => !!A.datos;
-render();
+if (!window.hcAcceso()) render();
