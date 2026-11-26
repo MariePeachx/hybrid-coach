@@ -275,15 +275,13 @@ const RACE_TEMPLATE = [
 const FASE_TXT = { "Arranque":"Vuelves a coger el ritmo después de Talent Land: semanas más cortas, con dos días de descanso y fuerza en casa.", "Base":"Kilómetros suaves, técnica y fuerza general.", "Desarrollo":"Series cortas, fartlek, carrera continua progresiva y tiradas de 14-16 km. Cada semana un poco más.", "Descarga":"Bajas la carga una semana para asimilar lo entrenado. Dos días de descanso.", "Volumen":"Tus semanas con más kilómetros: tiradas largas de 12 a 16 km y toboganes.", "Específico":"Series de 1 y 2 km y bloques a ritmo (II-III), cerca de tu ritmo de carrera.", "Pico de forma":"Última semana fuerte: kilómetros, toboganes y tirada de 14 km. Después ya solo toca afinar.", "Puesta a punto":"Bajas volumen y mantienes la chispa.", "Semana de carrera":"Poco y suave. Llegas fresca al día D." };
 const faseTxt = f => FASE_TXT[f.trim()]||"";
 // Semanas reescritas a mano (lunes de la semana → 7 días). Mandan sobre el plan de esa semana.
-const TL = "Descanso · Talent Land: hoy no entrenas";
+const TL = "No entrenaste · Talent Land";
 const SEMANAS_FIJAS = {
   "2026-11-23": [
     "Hecho: 4 km suave + fartlek 4'-3'-2'-1'-30″ alegres rc lo mismo + 10' suave",
-    "Fuerza en casa, 20 minutos: 3 vueltas de 12 sentadillas, 10 zancadas por pierna, 15 puentes de glúteo, 10 flexiones (de rodillas vale), 30″ de plancha y 10 superman. 1' de descanso entre vueltas. Talent Land: sin correr",
-    "Core en casa, 15-20 minutos: 3 vueltas de 40″ de plancha, 30″ de plancha lateral por lado, 20 bicicletas, 12 elevaciones de piernas, 10 dead bug por lado y 15 puentes de glúteo. 1' de descanso entre vueltas. Talent Land: sin correr",
+    TL, TL, TL,
     "Vuelta a correr: 6 km suave + 4 progresivos suaves. Al acabar, 10' muy suaves o caminando para terminar tranquila",
-    "7 km suave + PFG I, o el core en casa del miércoles. Al acabar, 5' caminando",
-    "12 km suave (I) sin mirar el ritmo; los 2 últimos km, aún más suaves. Al acabar, 5' caminando",
+    "9 km suave (I) sin mirar el ritmo + core en casa 10' (plancha, plancha lateral y puentes de glúteo). Al acabar, 5' caminando",
     "Descanso"],
 };
 // Vuelta a la calma: en los días de calidad, terminar siempre tranquila (sin acabar con un sprint)
@@ -408,10 +406,42 @@ function customWeek(kind, o, raceIdx){
   if (kind==="rec") return ["Descanso","30' muy suaves","Descanso","30-40' (I)","Descanso","40' (I) + 6 progresivos","Descanso"];
   return [];
 }
+// Días de entreno que no hiciste en una semana ya pasada (o en lo que va de ella):
+// marcados con «No puedo», escritos como «No entrenaste», o sin registrar si sueles registrar tus entrenos.
+function fallosDe(start, days){
+  const t = today(), sk = P().saltados||{};
+  const registra = S.workouts.some(w=>{ const d = parseYmd(w.fecha); return d>=addDays(start,-21) && d<addDays(start,7); });
+  let n = 0;
+  days.forEach((s,k)=>{
+    const d = addDays(start,k), f = ymd(d);
+    if (/^no entrenaste/i.test(s)) { n++; return; }
+    if (d>=t) return;
+    if (/^No entrenas hoy/.test(s)) { n++; return; }
+    if (sk[f]) { n++; return; }
+    if (registra && !isRest(s) && !/^Hecho/.test(s) && !doneOn(f).length) n++;
+  });
+  return n;
+}
+// Semana puente: después de una semana mala (2 o más días sin entrenar, o marcada «No estoy a tope»),
+// la siguiente baja la carga para volver poco a poco: solo la primera sesión de calidad (más corta),
+// las demás sesiones fuertes pasan a rodaje suave y los rodajes bajan un 20 %.
+const PUENTE_TXT = "Rodaje suave";
+function semanaPuente(days){
+  let calidad = false;
+  return days.map(s=>{
+    if (isRest(s) || isRace(s) || tipoDe(s)==="fuerza") return s;
+    const est = kmDe(s.replace(/\([^()]*\)/g,"")) + minDe(s)/5.2;
+    if (isQuality(s) && !calidad){ calidad = true; return suavizaSeries(s, 0.7); }
+    if (isKey(s)){
+      return `${PUENTE_TXT} ${Math.max(5, Math.min(10, Math.round(est*0.7)))} km (I) + 4 progresivos suaves. Al acabar, 5' caminando`;
+    }
+    return s.replace(/(\d+)(?:-(\d+))?\s*km/g, (m,a,b)=> b ? `${Math.max(3,Math.round(a*0.8))}-${Math.max(3,Math.round(b*0.8))} km` : `${Math.max(3,Math.round(a*0.8))} km`);
+  });
+}
 let planMemo = { key:"", val:null };
 function plan(){
   const o = mainObj(); if (!o || !o.fecha) return null;
-  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().series||"", P().tranquilos||{}, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||""]);
+  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().series||"", P().tranquilos||{}, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||"", ymd(today()), S.workouts.map(w=>w.fecha).join()]);
   if (planMemo.key===key) return planMemo.val;
   const st = planStart(), race = parseYmd(o.fecha), raceMon = mondayOf(race), N = Math.round(daysBetween(st,raceMon)/7)+1;
   let val = null;
@@ -420,16 +450,20 @@ function plan(){
     if (N<tpl.length) tpl = tpl.slice(tpl.length-N);
     else { const extra = []; for (let i=0;i<N-tpl.length;i++) extra.push(["2024-25-p01",(i%4)+1,"Base"]); tpl = extra.concat(tpl); }
     const latest = periodo("2025-26-p11") || S.periodos[0];
+    let previa = null;
     const weeks = tpl.map(([id,w,fase,dd],i)=>{
       const p = periodo(id), start = addDays(st,7*i);
+      const fallos = previa ? fallosDe(previa.start, previa.days) : 0, previaSuave = !!previa?.suave;
       let days = id==="taper"||id==="race" ? customWeek(id,o,dayIdx(race)) : p ? (weeksOf(p)[w-1]||[]).map(limpia) : [];
       let v = p || periodo("2025-26-p04") || latest, src = (id==="taper"||id==="race")?"app":"coach";
       const suave = id!=="race" && isSuave(start);
       if (suave){ const b = baseSuave(); if (b){ days = b.days.map(limpia); v = b.v; src = "suave"; } }
       if (src==="coach") days = days.map(s=>calmaFinal(suavizaSeries(s, factorSeries(i, N))));
       const fija = SEMANAS_FIJAS[ymd(start)];
-      if (fija) return { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(fija.slice(), start), start), src:"app", suave:false };
-      return { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), start), src, suave };
+      if (fija) return previa = { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(fija.slice(), start), start), src:"app", suave:false };
+      const puente = !suave && id!=="race" && id!=="taper" && (fallos>=2 || previaSuave);
+      if (puente) days = semanaPuente(days);
+      return previa = { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(restructure(dosDescansos(moveRest(days), dd===2 && !suave), start), start), start), src, suave, puente, fallos, previaSuave };
     });
     val = { start:st, race, raceMon, obj:o, weeks };
   }
@@ -538,7 +572,7 @@ async function setVuelta(dias){
   else { delete p.vuelta; p.vueltaFin = ymd(today()); } // al terminarla a mano, se olvida también la vuelta automática
   try { await savePerfil(p); } catch(e){} S.vueltaAsk = false; render();
 }
-const isRest = s => /^\s*(descanso|calentamiento o descanso|recuperación|no entrenas hoy)/i.test(s) || !s.trim();
+const isRest = s => /^\s*(descanso|calentamiento o descanso|recuperación|no entrenas hoy|no entrenaste)/i.test(s) || !s.trim();
 const isRace = s => /\bcto\.|campeonato|criterium|milla de|carrera nerja|cross de |día de carrera/i.test(s);
 const isQuality = s => /\d\s*x\s*\d|\d+-\d+-\d+|rápid|fuertes|fartlek|progresiva|\((III|IV|V)|toboganes|cuestas|a tope|%|\(II\)|ritmo de media/i.test(s);
 function circuitosDe(s){ const t = s.toLowerCase(), out = [];
@@ -786,7 +820,7 @@ function vHoy(){
     ${S.quick && !done.length ? quickForm(s) : ""}
     ${rampBox(t, s)}
     ${sickHint(t)}
-    ${(si.wk?.suave||si.suave)?`<p class="hint" style="margin-top:.8rem">Semana suave: entrenos de base de tu entrenador.</p>`:si.kind==="plan"?`<p class="hint" style="margin-top:.8rem">${si.wk.src==="app"?"Semana preparada para tu carrera.":"Entreno de tu entrenador."}</p>`:""}`;
+    ${si.wk?.puente?`<p class="hint" style="margin-top:.8rem">${puenteTxt(si.wk)}</p>`:(si.wk?.suave||si.suave)?`<p class="hint" style="margin-top:.8rem">Semana suave: entrenos de base de tu entrenador.</p>`:si.kind==="plan"?`<p class="hint" style="margin-top:.8rem">${si.wk.src==="app"?"Semana preparada para tu carrera.":"Entreno de tu entrenador."}</p>`:""}`;
   const circs = circuitosDe(s); let fz;
   if (sToday==="plan" && circs.length) fz = `<p class="kicker" style="color:var(--str)">Fuerza · en tu entreno</p><h2>${circs.map(c=>esc(circ(c)?.nombre||c)).join(" + ")}</h2><p>${esc(circ(circs[0])?.metodo||"")}</p><div class="actions" style="margin-top:.7rem"><a class="btn sm" href="#fuerza" data-act="circ" data-c="${circs[0]}">Ver ejercicios</a></div>`;
   else if (sToday==="plan") fz = `<p class="kicker" style="color:var(--str)">Fuerza · en tu entreno</p><h2>Trabajo de fuerza incluido</h2><p>Tu sesión ya lleva fuerza. Cuida la técnica.</p>`;
@@ -874,11 +908,13 @@ function vSemana(){
     ${si.v?`<section class="card">${ritmosCard(si.v)}</section>`:""}
   </div>`;
 }
+const puenteTxt = wk => `Semana puente: ${wk.previaSuave ? "la semana pasada no estabas a tope" : `la semana pasada no entrenaste ${wk.fallos} días`}, así que esta va más suave para volver poco a poco. La siguiente sigue el plan.`;
 function weekControls(mon){
   const t = today(), su = isSuave(mon), past = addDays(mon,6) < t, si = sessionFor(mon), isRaceWeek = si.kind==="plan" && si.wk.days.some(isRace);
   const rd = +P().restDay;
   return `<section class="card">
     <p class="kicker">¿Cómo llegas a esta semana?</p>
+    ${si.kind==="plan"&&si.wk.puente?`<p style="color:var(--ink);margin-bottom:.6rem">${puenteTxt(si.wk)}</p>`:""}
     ${isRaceWeek ? `<p>Es la semana de tu carrera: ya es suave y no se cambia.</p>` : past ? `<p>${su?"Esta semana la hiciste en versión suave.":"Semana pasada."}</p>` :
       su ? `<h2>Semana suave activada</h2><p>Has cambiado esta semana por la semana más suave de la base de tu entrenador: rodajes de 4-10 km a ritmo (I), PFG y técnica. La semana siguiente vuelve al plan.</p>
         <div class="actions" style="margin-top:.7rem"><button class="btn sm" data-act="suave" data-w="${ymd(mon)}">Volver al plan normal</button></div>`
@@ -916,7 +952,7 @@ function vPlan(){
       html += `<div class="phase"><h3>${esc(w.fase)}</h3><span class="hint">${fmtShort(ws[0].start)} – ${fmtShort(addDays(ws[ws.length-1].start,6))}</span></div><p class="hint" style="margin:0 .6rem .3rem">${esc(faseTxt(w.fase))}</p>`; }
     const km = weekKm(w.days), dn = [0,1,2,3,4,5,6].filter(k=>doneOn(ymd(addDays(w.start,k))).length).length;
     html += `<button class="wrow${i===cur?" now":""}" data-act="wsel" data-i="${i}" aria-expanded="${i===sel}"><span class="wn">Sem ${w.num}</span>
-      <span><b>${fmtShort(w.start)} – ${fmtShort(addDays(w.start,6))}</b><small>${i===cur?"Esta semana · ":""}${km?"≈ "+km+" km":""}${dn?" · "+dn+" hechos":""}</small></span><span class="hint">${i===sel?"▲":"▼"}</span></button>`;
+      <span><b>${fmtShort(w.start)} – ${fmtShort(addDays(w.start,6))}</b><small>${i===cur?"Esta semana · ":""}${w.puente?"Semana puente · ":""}${km?"≈ "+km+" km":""}${dn?" · "+dn+" hechos":""}</small></span><span class="hint">${i===sel?"▲":"▼"}</span></button>`;
     if (i===sel) html += `<div id="wdet" style="padding:0 .6rem .6rem"><div class="list">${w.days.map((s,k)=>{ const d = addDays(w.start,k), f = ymd(d);
       return `<div class="row${f===ymd(t)?" now":""}"><div class="when">${DIAS[k]}<b class="num">${d.getDate()}</b>${MESES[d.getMonth()]}</div><div><div class="t">${sessionCard(s, w.v)}</div>${doneOn(f).length?`<div class="meta"><span class="done">✓ Hecho</span></div>`:""}</div></div>`; }).join("")}</div>
       <div style="margin-top:.8rem">${ritmosCard(w.v)}</div></div>`;
