@@ -66,6 +66,29 @@ h1,h2,h3{margin:0;font-family:var(--f-head);letter-spacing:-.02em;text-wrap:bala
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(6,1fr);background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .tabbar a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:.55rem 0 .5rem;font-size:11px;font-weight:700;color:var(--muted)}
 .tabbar a[aria-current="page"]{color:var(--blue)}
+.ses summary{list-style:none;display:flex;align-items:center;gap:.65rem;cursor:pointer;padding:.15rem 0;-webkit-tap-highlight-color:transparent}
+.ses summary::-webkit-details-marker{display:none}
+.sdot{width:10px;height:10px;border-radius:50%;flex:none}
+.st{display:flex;flex-direction:column;min-width:0;flex:1}
+.st b{font-family:var(--f-head);font-weight:600;color:var(--ink);line-height:1.3}
+.st small{font-size:.8rem;color:var(--muted);font-weight:600;margin-top:.1rem}
+.chev{width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;flex:none;margin:0 .35rem .25rem 0}
+.ses[open] .chev{transform:rotate(-135deg);margin-bottom:-.2rem}
+.ses.big{margin-top:.6rem}
+.ses.big .st b{font-size:clamp(1.3rem,5.2vw,1.55rem);font-weight:700}
+.ses.big .st small{font-size:.86rem}
+.ses .tap{color:var(--blue);font-weight:700}
+.ses[open] .tap{display:none}
+.det{margin-top:.75rem;padding-top:.8rem;border-top:1px dashed var(--line)}
+.parts{list-style:none;margin:0;padding:0;display:grid;gap:.8rem}
+.parts>li{padding-left:.85rem;border-left:3px solid var(--line)}
+.plab{display:block;font-size:.68rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.ptxt{color:var(--ink);font-weight:500;overflow-wrap:anywhere;line-height:1.45}
+.card p.pex,.pex{margin:.25rem 0 0;font-size:.88rem;color:var(--muted)}
+.pitems{margin:.25rem 0 0;padding-left:1.1rem;color:var(--ink)}
+.card p.snote,.snote{margin:0 0 .7rem;font-size:.82rem;font-weight:700;color:var(--muted)}
+.ses.rest{display:flex;align-items:center;gap:.65rem;padding:.15rem 0}
+.ses.rest b{font-weight:600;color:var(--muted)}
 .breath{display:grid;place-items:center;margin:1rem auto .6rem;width:min(70vw,220px);aspect-ratio:1}
 .breath .orb{grid-area:1/1;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--ok) 45%,transparent),color-mix(in srgb,var(--blue) 25%,transparent));transform:scale(.55);transition:transform 4s ease-in-out}
 .breath .lbl{grid-area:1/1;text-align:center;font-weight:700;color:var(--ink);font-size:1.15rem;line-height:1.3;padding:0 1rem}
@@ -537,6 +560,127 @@ function fmtSession(s, v){
   if (aSensaciones()) return esc(sensacionesTxt(s)).replace(RX, (m,g)=>`<span class="rt">${g.split(/\s*-\s*/).map(k=>SENS[k]||k).join("-")}</span>`);
   return esc(s).replace(RX, (m,g)=>{ const t = g.split(/\s*-\s*/).map(k=>v?.ritmos?.[k] ? k+": "+v.ritmos[k]+"/km" : k).join(" · "); return `<span class="rt" title="${esc(t)}">${g}</span>`; }); }
 const sensCard = () => `<p class="kicker">Ritmos a sensaciones</p><ul class="gloss">${SENS_TXT.map(([a,b])=>`<li><b>${a}</b> · ${b}</li>`).join("")}</ul><p class="hint">Sin mirar números: corre por cómo te sientes. Si un día va mal, baja un escalón y ya está.</p>`;
+/* ---------- Entreno resumido + detalle paso a paso ---------- */
+// Separa un entreno por « + » sin romper lo que va entre paréntesis
+function trozos(s){
+  const out = []; let d = 0, cur = "";
+  for (let i=0; i<s.length; i++){
+    const c = s[i]; if (c==="(") d++; if (c===")") d = Math.max(0,d-1);
+    if (!d && s.startsWith(" + ", i)){ out.push(cur.trim()); cur = ""; i += 2; continue; }
+    cur += c;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+const zonaTxt = z => aSensaciones() ? (SENS[z]||z) : "("+z+")";
+const listaY = a => a.length>1 ? a.slice(0,-1).join(", ")+" y "+a[a.length-1] : a[0]||"";
+const sinComilla = x => String(x).replace(/'$/,"");
+function seriesDe(s){
+  for (const m of s.matchAll(/(\d+)(?:-(\d+))?\s*x\s*(\d+)(?:\s*x\s*(\d+(?:[.,]\d+)?))?\s*(km|m\b)?/gi)){
+    const [, a, , b, c, u] = m;
+    if (c){ if (u==="km" || +c>=100) return { txt:`${a}x${b}x${c}${u==="km"?" km":" m"}`, bloques:+a, n:+b, dist:c+(u==="km"?" km":" m") }; continue; }
+    if (u==="km" || +b>=100) return { txt:`${a}x${b}${u==="km"?" km":" m"}`, n:+a, dist:b+(u==="km"?" km":" m") };
+  }
+  return null;
+}
+// Explica con palabras la parte difícil de leer
+const sinParen = s => { let x = String(s); while (/\([^()]*\)/.test(x)) x = x.replace(/\([^()]*\)/g,""); return x; };
+function explica(p){
+  const out = [], pp = sinParen(p);
+  const pir = pp.match(/((?:\d+'(?:\d+″)?\s*-\s*)+\d+(?:'|″)(?:\d+″)?)\s*(\w+)?(?:.*?rc\s*((?:\d+'?\s*-\s*)*\d+'?|lo mismo))?/);
+  if (pir){
+    const tiempos = l => { const a = l.split(/\s*-\s*/); const soloMin = a.every(x=>/^\d+'?$/.test(x));
+      return soloMin ? listaY(a.map(sinComilla))+" min" : listaY(a.map(x=>/″/.test(x)&&!/'/.test(x) ? x.replace("″"," s") : sinComilla(x).replace(/'(\d+)″/," min $1 s")+(/'$/.test(x)?" min":""))); };
+    const r = pir[3] ? (pir[3]==="lo mismo" ? "el mismo tiempo" : tiempos(pir[3])) : "";
+    out.push(`Bloques de ${tiempos(pir[1])} a ritmo ${aSensaciones()?"alegre":"rápido"}${r?`. Entre bloque y bloque, trote muy suave: ${r}`:""}.`);
+  }
+  const sr = !pir && seriesDe(p);
+  if (sr){
+    const rc = p.match(/rc\s+([\d'″",.]+)(?:\s*y\s*([\d'″"]+))?/);
+    const base = sr.bloques ? `${sr.bloques} bloques de ${sr.n} repeticiones de ${sr.dist}` : `${sr.n} repeticiones de ${sr.dist}`;
+    const rec = rc ? (rc[2] ? `, recuperando ${rc[1]} entre repeticiones y ${rc[2]} entre bloques` : `, recuperando ${rc[1]} trotando suave o andando entre cada una`) : "";
+    out.push(cap(base)+rec+".");
+  }
+  const cc = p.match(/\((\d+)\s*(IV|III|II|I)\s*\+\s*(\d+)\s*(IV|III|II|I)(?:\s*\+\s*(\d+)\s*(IV|III|II|I))?\)/);
+  if (cc){ const z = [[cc[1],cc[2]],[cc[3],cc[4]]].concat(cc[5]?[[cc[5],cc[6]]]:[]);
+    out.push(`Sin parar: ${listaY(z.map(([k,zz])=>`${k} km ${zonaTxt(zz)}`))}.`); }
+  if (/fartlek/i.test(p) && !pir) out.push("Cambios de ritmo libres: acelera cuando te apetezca y vuelve a suave.");
+  if (/toboganes/i.test(p)) out.push("En un recorrido con subidas: subes con alegría y el resto lo llevas suave.");
+  if (/playa/i.test(p)) out.push("Por la arena: zancada corta y sin forzar.");
+  return out.join(" ");
+}
+function etiqueta(p, i, n){
+  if (/p\.?f\.?g|circuito|pesas|fuerza|sentadilla|multisaltos|elasticidad|abdominal|balón medicinal|subidas a banco/i.test(p) && !/km|'\s*\(I/.test(p.split(/pfg|circuito/i)[0]||"")) return ["Fuerza","var(--str)"];
+  if (/\bTC\b|técnica/i.test(p)) return ["Técnica","var(--blue)"];
+  if (/progresivos|rectas/i.test(p) && !seriesDe(p)) return ["Progresivos","var(--qual)"];
+  if (isQuality(p) || seriesDe(p) || /fartlek|toboganes|cuestas/i.test(p)) return ["Parte principal","var(--qual)"];
+  if (n>1 && i===0) return ["Calentamiento","var(--run)"];
+  if (n>1 && i===n-1) return ["Vuelta a la calma","var(--ok)"];
+  return ["Rodaje","var(--run)"];
+}
+function titulo(s){
+  if (isRest(s)) return /talent/i.test(s) ? "Descanso · Talent Land" : s===DESC2_TXT ? "Descanso extra" : "Descanso";
+  if (s.startsWith(TRANQ_TXT)) return "Día tranquilo";
+  if (s.startsWith(RAMP_TXT)) return "Vuelta progresiva";
+  if (isRace(s)) return /^Día de carrera/.test(s) ? "Día de carrera" : "Competición";
+  const casa = s.match(/^(Fuerza|Core) en casa/i); if (casa) return casa[0];
+  const pre = /^Hecho:/.test(s) ? "Hecho · " : "";
+  if (/\d+'(?:\d+″)?\s*-\s*\d+'/.test(sinParen(s))) return pre+"Fartlek en pirámide";
+  const sr = seriesDe(s); if (sr) return pre+"Series · "+sr.txt;
+  if (/progresiva/i.test(s)) return pre+"Carrera progresiva";
+  if (/toboganes/i.test(s)) return pre+"Toboganes";
+  if (/cuestas/i.test(s)) return pre+"Cuestas";
+  if (/fartlek/i.test(s)) return pre+"Fartlek";
+  if (/playa/i.test(s)) return pre+"Rodaje en la playa";
+  if (/\((II|III|IV)/.test(s)) return pre+"Rodaje con cambio de ritmo";
+  return pre+(kmDe(s)>=12 ? "Tirada larga" : "Rodaje suave");
+}
+function colorDe(s){ return isRest(s) ? "var(--rest)" : isRace(s) ? "var(--race)" : tipoDe(s)==="fuerza" ? "var(--str)" : s.startsWith(TRANQ_TXT)||s.startsWith(RAMP_TXT) ? "var(--ok)" : isQuality(s) ? "var(--qual)" : "var(--run)"; }
+function datosDe(s){
+  let sp = s; while (/\([^()]*\)/.test(sp)) sp = sp.replace(/\([^()]*\)/g,"");
+  const km = Math.round(kmDe(sp) || kmDe(s)), min = estimaDuracion(sp) || estimaDuracion(s), d = [];
+  if (km) d.push("≈ "+km+" km"); if (min) d.push("≈ "+fmtDur(min)); if (hasStrength(s) && tipoDe(s)!=="fuerza") d.push("con fuerza");
+  return d.join(" · ");
+}
+// Desglose: etiqueta, texto y explicación de cada parte
+function desglose(s){
+  let txt = s, nota = "", calma = [];
+  const mC = txt.match(/\s·\s(Al acabar:.*)$/); if (mC){ calma.push(mC[1].replace(/^Al acabar:\s*/,"")); txt = txt.slice(0, mC.index); }
+  const mv = txt.match(/\s·\s(movido del \w+)$/); if (mv){ nota = cap(mv[1]); txt = txt.slice(0, mv.index); }
+  const mP = txt.match(/^([^:()0-9]{3,40}?(?:, [\d-]+ minutos)?):\s+/); if (mP){ nota = nota || mP[1]; txt = txt.slice(mP[0].length); }
+  const fr = txt.split(/\.\s+(?=[A-ZÁÉÍÓÚ0-9])/).map(x=>x.replace(/\.$/,"").trim()).filter(Boolean);
+  txt = fr.shift() || "";
+  const extra = [];
+  fr.forEach(f=>{ if (/^Al acabar/i.test(f)) calma.push(f.replace(/^Al acabar,?\s*/i,"")); else extra.push(f); });
+  let partes;
+  const vueltas = txt.match(/^(\d+) vueltas de (.*)$/);
+  if (vueltas) partes = [{ lab:[`${vueltas[1]} vueltas`,"var(--str)"], txt:"", items: vueltas[2].split(/,\s*|\s+y\s+(?=\d)/) }];
+  else { const ts = trozos(txt); partes = ts.map((p,i)=>({ lab:etiqueta(p,i,ts.length), txt:p, ex:explica(p) }));
+    if (!partes.some(x=>x.lab[0]==="Parte principal") && partes[0]?.lab[0]==="Calentamiento") partes[0].lab = ["Rodaje","var(--run)"]; }
+  extra.forEach(e=>partes.push({ lab:["Nota","var(--muted)"], txt:e }));
+  calma.forEach(c=>partes.push({ lab:["Al acabar","var(--ok)"], txt:cap(c) }));
+  return { nota, partes };
+}
+function sessionCard(s, v, opts={}){
+  if (!s) return `<p class="hint">—</p>`;
+  const tit = titulo(s), col = colorDe(s), datos = datosDe(s);
+  if (isRest(s) && !opts.full) return `<div class="ses rest"><span class="sdot" style="background:${col}"></span><b>${esc(tit)}</b></div>`;
+  const { nota, partes } = desglose(s), gl = glosarioDe(s), rs = ritmosUsados(s);
+  const sens = rs.length && aSensaciones() ? rs.map(k=>SENS[k]).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<li><b>${x}</b> · ${SENS_TXT.find(([a])=>a===x)[1]}</li>`).join("") : "";
+  const nums = rs.length && v && !aSensaciones() ? `<div class="paces">${rs.map(k=>`<span class="pace"><span class="rt">${k}</span><b>${esc(v.ritmos?.[k]||"—")}</b><span class="hint">/km</span></span>`).join("")}</div>` : "";
+  const glos = gl.filter(([,a])=>!(aSensaciones() && /^\(I\)/.test(a)));
+  return `<details class="ses${opts.big?" big":""}"${opts.open?" open":""}>
+    <summary><span class="sdot" style="background:${col}"></span><span class="st"><b>${esc(tit)}</b>${datos?`<small>${datos}</small>`:""}${opts.big?`<small class="tap">Toca para ver el entreno paso a paso</small>`:""}</span><span class="chev" aria-hidden="true"></span></summary>
+    <div class="det">${nota?`<p class="snote">${esc(nota)}</p>`:""}
+      <ol class="parts">${partes.map(p=>`<li><span class="plab" style="color:${p.lab[1]}">${esc(p.lab[0])}</span>
+        ${p.txt?`<div class="ptxt">${fmtSession(p.txt, v)}</div>`:""}
+        ${p.items?`<ul class="pitems">${p.items.map(x=>`<li>${fmtSession(x, v)}</li>`).join("")}</ul>`:""}
+        ${p.ex?`<p class="pex">${esc(p.ex)}</p>`:""}</li>`).join("")}</ol>
+      ${sens||glos.length?`<ul class="gloss">${sens}${glos.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul>`:""}
+      ${nums}
+      ${circuitosDe(s).length?`<div class="actions" style="margin-top:.7rem"><a class="btn sm" href="#fuerza" data-act="circ" data-c="${circuitosDe(s)[0]}">Ver ejercicios de fuerza</a></div>`:""}
+    </div></details>`;
+}
 function ritmosUsados(s){ const set = new Set(); (s.match(RX)||[]).forEach(m=>m.slice(1,-1).split(/\s*-\s*/).forEach(k=>set.add(k)));
   (s.match(/\b(I{1,3}|IV)\b(?= \+| \)|\))/g)||[]).forEach(k=>set.add(k)); return ["I","II","III","IV","V"].filter(k=>set.has(k)); }
 const glosarioDe = s => GLOSARIO.filter(([re])=>re.test(s));
@@ -630,10 +774,7 @@ function vHoy(){
   const tag = s.startsWith(RAMP_TXT) ? `<span class="pill" style="color:var(--ok)">Vuelta progresiva</span>` : tipoDe(s)==="fuerza" ? `<span class="pill" style="color:var(--str)">Fuerza</span>` : isRace(s) ? `<span class="pill" style="color:var(--race)">Carrera</span>` : isRest(s) ? `<span class="pill" style="color:var(--rest)">Descanso</span>` : isQuality(s) ? `<span class="pill" style="color:var(--qual)">Calidad</span>` : `<span class="pill" style="color:var(--run)">Rodaje</span>`;
   const rs = ritmosUsados(s), gl = glosarioDe(s);
   const main = `<div class="cardhead" style="margin:0"><p class="kicker">Hoy toca</p>${tag}</div>
-    <p class="session">${fmtSession(s,v)}</p>
-    ${rs.length&&aSensaciones()?`<ul class="gloss">${rs.map(k=>SENS[k]).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<li><b>${x}</b> · ${SENS_TXT.find(([a])=>a===x)[1]}</li>`).join("")}</ul>`:""}
-    ${rs.length&&v&&!aSensaciones()?`<div class="paces">${rs.map(k=>`<span class="pace"><span class="rt">${k}</span><b>${esc(v.ritmos?.[k]||"—")}</b><span class="hint">/km</span></span>`).join("")}</div>`:""}
-    ${gl.length?`<ul class="gloss">${gl.map(([,a,b])=>`<li><b>${esc(a)}</b> · ${esc(b)}</li>`).join("")}</ul>`:""}
+    ${sessionCard(s, v, { big:true, full:true })}
     <div class="actions" style="margin-top:1.1rem">${done.length?`<span class="done">✓ Hecho: ${esc(done.map(w=>fmtDur(w.duracion)+(w.distancia?" · "+(+w.distancia).toFixed(1)+" km":"")).join(" + "))}</span>`
       : skipOf(f) ? `<span class="hint">Tu semana se ha reorganizado. Mira «Semana» para ver los cambios.</span><button class="btn sm" data-act="skip-undo" data-f="${f}">Deshacer</button>`
       : isRest(s) ? `<span class="hint">Descansa. Si sales a correr, apúntalo.</span><button class="btn sm" data-act="quick">Registrar</button>`
@@ -660,7 +801,7 @@ function vHoy(){
     ${raceBanner()}
     <section class="card today">${main}</section>
     <section class="card">${fz}</section>
-    <section class="card"><p class="kicker">Mañana · ${DIAS_L[dayIdx(addDays(t,1))]}</p><p style="color:var(--ink)">${m.s?fmtSession(m.s,m.v):"—"}</p></section>
+    <section class="card"><p class="kicker">Mañana · ${DIAS_L[dayIdx(addDays(t,1))]}</p>${sessionCard(m.s, m.v)}</section>
     <section class="card"><div class="cardhead"><p class="kicker">Esta semana${isSuave(mon)?" · suave":""}</p><a class="btn sm" href="#semana">${isSuave(mon)?"Ver semana":"¿No estás a tope?"}</a></div><div class="week">${week}</div>
       <p class="hint" style="margin-top:.6rem"><span class="dot" style="background:var(--run)"></span> rodaje &nbsp;<span class="dot" style="background:var(--qual)"></span> calidad &nbsp;<span class="dot" style="background:var(--str)"></span> fuerza &nbsp;✓ hecho</p></section>
     ${installCard()}
@@ -719,7 +860,7 @@ function vSemana(){
   const t = today(), mon = addDays(mondayOf(t), 7*S.weekOff), sp = strengthPlanFor(mon), si = sessionFor(mon);
   const rows = DIAS_L.map((dl,i)=>{ const d = addDays(mon,i), f = ymd(d), { s, v } = sessionFor(d), dn = doneOn(f);
     return `<div class="row${f===ymd(t)?" now":""}"><div class="when">${DIAS[i]}<b class="num">${d.getDate()}</b>${MESES[d.getMonth()]}</div>
-      <div><div class="t">${s?fmtSession(s,v):"—"}</div><div class="meta">${isRace(s)?`<span class="pill" style="color:var(--race)">Carrera</span>`:""}${sp[i]==="extra"?`<span class="pill" style="color:var(--str)">+ 20' PFG</span>`:sp[i]?`<span class="pill" style="color:var(--str)">Fuerza</span>`:""}
+      <div><div class="t">${sessionCard(s, v)}</div><div class="meta">${isRace(s)?`<span class="pill" style="color:var(--race)">Carrera</span>`:""}${sp[i]==="extra"?`<span class="pill" style="color:var(--str)">+ 20' PFG</span>`:sp[i]?`<span class="pill" style="color:var(--str)">Fuerza</span>`:""}
       ${dn.map(w=>`<span class="done">✓ ${fmtDur(w.duracion)}${w.distancia?" · "+(+w.distancia).toFixed(1)+" km":""}</span>`).join("")}</div>
       ${/movido del/.test(s)?`<span class="pill" style="color:var(--qual)">Movido</span>`:""}
       ${skipOf(f)&&!dn.length ? `<div class="acts"><button class="btn sm" data-act="skip-undo" data-f="${f}">Deshacer</button></div>`
@@ -777,7 +918,7 @@ function vPlan(){
     html += `<button class="wrow${i===cur?" now":""}" data-act="wsel" data-i="${i}" aria-expanded="${i===sel}"><span class="wn">Sem ${w.num}</span>
       <span><b>${fmtShort(w.start)} – ${fmtShort(addDays(w.start,6))}</b><small>${i===cur?"Esta semana · ":""}${km?"≈ "+km+" km":""}${dn?" · "+dn+" hechos":""}</small></span><span class="hint">${i===sel?"▲":"▼"}</span></button>`;
     if (i===sel) html += `<div id="wdet" style="padding:0 .6rem .6rem"><div class="list">${w.days.map((s,k)=>{ const d = addDays(w.start,k), f = ymd(d);
-      return `<div class="row${f===ymd(t)?" now":""}"><div class="when">${DIAS[k]}<b class="num">${d.getDate()}</b>${MESES[d.getMonth()]}</div><div><div class="t">${fmtSession(s,w.v)}</div>${doneOn(f).length?`<div class="meta"><span class="done">✓ Hecho</span></div>`:""}</div></div>`; }).join("")}</div>
+      return `<div class="row${f===ymd(t)?" now":""}"><div class="when">${DIAS[k]}<b class="num">${d.getDate()}</b>${MESES[d.getMonth()]}</div><div><div class="t">${sessionCard(s, w.v)}</div>${doneOn(f).length?`<div class="meta"><span class="done">✓ Hecho</span></div>`:""}</div></div>`; }).join("")}</div>
       <div style="margin-top:.8rem">${ritmosCard(w.v)}</div></div>`;
   });
   return `<div class="stack">
