@@ -194,7 +194,7 @@ form{display:flex;flex-direction:column;gap:1rem}
 .field{display:flex;flex-direction:column;gap:.35rem;min-width:0}
 .field.full{grid-column:1/-1}
 .field label,.field .lab{font-size:.85rem;font-weight:700}
-input[type=text],input[type=number],input[type=date],select,textarea{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:.65rem .8rem;font-size:16px}
+input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select,textarea{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:.65rem .8rem;font-size:16px}
 textarea{min-height:4.5rem;resize:vertical}
 .check{display:flex;gap:.5rem;align-items:center;font-weight:600}
 .check input{width:1.15rem;height:1.15rem;accent-color:var(--blue)}
@@ -224,6 +224,7 @@ details summary{cursor:pointer;font-weight:700;padding:.3rem 0}
     <span class="wm"><b>Hybrid <span>Coach</span></b><small id="foot"></small></span>
   </a>
   <div class="icons">
+    <a class="ib" href="#cuenta" data-v="cuenta" aria-label="Mi cuenta" title="Mi cuenta"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></a>
     <a class="ib" href="#objetivo" data-v="objetivo" aria-label="Mi objetivo" title="Mi objetivo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></a>
     <button class="ib" id="themeBtn" type="button" aria-label="Cambiar tema" title="Cambiar tema"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   </div>
@@ -253,7 +254,7 @@ const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 const DIAS_L = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 const MESES_L = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-const ROUTES = ["hoy","semana","plan","fuerza","calma","historial","objetivo","registrar"];
+const ROUTES = ["hoy","semana","plan","fuerza","calma","historial","objetivo","registrar","cuenta"];
 const TYPES = { carrera:{label:"Carrera",c:"var(--run)",dist:true}, fuerza:{label:"Fuerza",c:"var(--str)",dist:false}, competicion:{label:"Competición",c:"var(--race)",dist:true}, otro:{label:"Otro",c:"var(--rest)",dist:true} };
 const PLAN_START = "2026-11-23"; // empezamos el lunes 23/11/2026 (el domingo 22 es el día 0)
 const DEFAULT_OBJ = { nombre:"Media maratón de Álora", distancia:21.1, fecha:"2027-03-07", tiempo:"" };
@@ -441,7 +442,7 @@ function semanaPuente(days){
 let planMemo = { key:"", val:null };
 function plan(){
   const o = mainObj(); if (!o || !o.fecha) return null;
-  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().series||"", P().tranquilos||{}, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||"", ymd(today()), S.workouts.map(w=>w.fecha).join()]);
+  const key = JSON.stringify([o, P().planStart||"", S.periodos.length, P().restDay, P().descansos||"", P().series||"", P().tranquilos||{}, P().suaves||{}, P().saltados||{}, P().vuelta||null, P().vueltaFin||"", !!(window.hcEsSuscriptora && hcEsSuscriptora()), ymd(today()), S.workouts.map(w=>w.fecha).join()]);
   if (planMemo.key===key) return planMemo.val;
   const st = planStart(), race = parseYmd(o.fecha), raceMon = mondayOf(race), N = Math.round(daysBetween(st,raceMon)/7)+1;
   let val = null;
@@ -459,7 +460,7 @@ function plan(){
       const suave = id!=="race" && isSuave(start);
       if (suave){ const b = baseSuave(); if (b){ days = b.days.map(limpia); v = b.v; src = "suave"; } }
       if (src==="coach") days = days.map(s=>calmaFinal(suavizaSeries(s, factorSeries(i, N))));
-      const fija = SEMANAS_FIJAS[ymd(start)];
+      const fija = window.hcEsSuscriptora && hcEsSuscriptora() ? null : SEMANAS_FIJAS[ymd(start)];
       if (fija) return previa = { num:i+1, total:N, start, fase, v, days:rampWeek(tranqWeek(fija.slice(), start), start), src:"app", suave:false };
       const puente = !suave && id!=="race" && id!=="taper" && (fallos>=2 || previaSuave);
       if (puente) days = semanaPuente(days);
@@ -748,8 +749,8 @@ function render(){
   if (S.mode==="error") st.innerHTML = "<b>No se pudo cargar el plan.</b> Comprueba tu conexión y recarga la página.";
   const el = $("#view");
   if (!S.periodos.length){ el.innerHTML = `<div class="card empty">Cargando tu plan…</div>`; return; }
-  el.innerHTML = ({hoy:vHoy,semana:vSemana,plan:vPlan,fuerza:vFuerza,calma:vCalma,historial:vHistorial,objetivo:vObjetivo,registrar:vRegistrar})[v]();
-  if (v==="hoy"){ wireQuick(); wireGoal(); } if (v==="calma") wireCalma(); if (v==="registrar") wireRegistrar(); if (v==="objetivo") wireObjetivo();
+  el.innerHTML = ({hoy:vHoy,semana:vSemana,plan:vPlan,fuerza:vFuerza,calma:vCalma,historial:vHistorial,objetivo:vObjetivo,registrar:vRegistrar,cuenta:()=>window.vCuenta ? vCuenta() : `<div class="card empty">Conectando… Para tu cuenta necesitas internet.</div>`})[v]();
+  if (v==="hoy"){ wireQuick(); wireGoal(); } if (v==="calma") wireCalma(); if (v==="cuenta" && window.wireCuenta) wireCuenta(); if (v==="registrar") wireRegistrar(); if (v==="objetivo") wireObjetivo();
 }
 
 /* ---------- Hoy ---------- */
@@ -833,6 +834,7 @@ function vHoy(){
   return `<div class="stack">
     <header class="hero"><p class="kicker">${esc(si.label)}${si.kind==="plan"?" · "+esc(si.fase):""}</p><h1>${fmtLong(t)}</h1></header>
     ${raceBanner()}
+    ${window.hcHoyCard ? hcHoyCard() : ""}
     <section class="card today">${main}</section>
     <section class="card">${fz}</section>
     <section class="card"><p class="kicker">Mañana · ${DIAS_L[dayIdx(addDays(t,1))]}</p>${sessionCard(m.s, m.v)}</section>
@@ -1283,5 +1285,7 @@ async function boot(){
 boot();
 if ("serviceWorker" in navigator) window.addEventListener("load", ()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
+<script src="firebase-config.js"></script>
+<script type="module" src="cuenta.js"></script>
 </body>
 </html>

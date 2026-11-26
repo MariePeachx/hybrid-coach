@@ -1,6 +1,6 @@
 // Guarda la app en el móvil para que se abra aunque no haya conexión.
-const CACHE = "hybrid-coach-v14";
-const FILES = ["./", "index.html", "dibujos.js", "temporada.json", "ejercicios.json", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "manifest.webmanifest"];
+const CACHE = "hybrid-coach-v16";
+const FILES = ["./", "index.html", "dibujos.js", "temporada.json", "ejercicios.json", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "manifest.webmanifest", "firebase-config.js", "cuenta.js"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -11,6 +11,7 @@ self.addEventListener("activate", e => {
 // Primero la red (para tener siempre la última versión); si no hay conexión, lo guardado.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  if (new URL(e.request.url).origin !== location.origin) return; // Firebase y otras webs: directo a la red
   e.respondWith(
     fetch(e.request).then(res => {
       if (res.ok && new URL(e.request.url).origin === location.origin) {
